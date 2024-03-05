@@ -1,8 +1,6 @@
 #include "inference.h"
 #include <regex>
 
-// #define benchmark
-#define min(a,b)            (((a) < (b)) ? (a) : (b))
 YOLO_V8::YOLO_V8() {
 
 }
@@ -81,7 +79,7 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
     bool result = std::regex_search(iParams.modelPath, pattern);
     if (result)
     {
-        //防止警告，const str to char*
+        //disable warning，const str to char*
         char* err_info = new char[150];
         std::strcpy(err_info,"[YOLO_V8]:Your model path is error.Change your model path without chinese characters.");
         std::cout << err_info << std::endl;
@@ -143,7 +141,7 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
         std::strcpy(merged, result.c_str());
         std::cout << merged << std::endl;
         delete[] merged;
-        //防止警告，const str to char*
+        //disable warning，const str to char*
         char* err_info = new char[100];
         std::strcpy(err_info,"[YOLO_V8]:Create session failed.");
         return err_info;
@@ -165,7 +163,7 @@ char* YOLO_V8::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
         YOLO_origin_Process(iImg, blob, oResult);
     }
     // else {
-    //     //处理half,FP16
+    //     // solve half,FP16
     //     half* blob = new half[processedImg.total() * 3];
     //     BlobFromImage(processedImg, blob);
     //     PaddleProcess(iImg, blob, oResult);

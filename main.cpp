@@ -123,8 +123,8 @@ void DetectTest()
     params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8n.onnx";
     params.modelType = YOLO_DETECT_V8;
 
-    params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8_n_500e_coco.onnx";
-    params.modelType = YOLO_PADDLE;
+    // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8_n_500e_coco.onnx";
+    // params.modelType = YOLO_PADDLE;
 
     // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/ppyoloe_plus_crn_l_80e_coco.onnx";
     // params.modelType = YOLO_PADDLE;
