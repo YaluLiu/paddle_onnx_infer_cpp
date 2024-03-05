@@ -118,16 +118,16 @@ void DetectTest()
     YOLO_V8* yoloDetector = new YOLO_V8;
     ReadCocoYaml(yoloDetector);
     DL_INIT_PARAM params;
-    params.rectConfidenceThreshold = 0.1;
+    params.rectConfidenceThreshold = 0.6;
     params.iouThreshold = 0.5;
-    params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8n.onnx";
-    params.modelType = YOLO_DETECT_V8;
+    // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8n.onnx";
+    // params.modelType = YOLO_DETECT_V8;
 
     // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8_n_500e_coco.onnx";
     // params.modelType = YOLO_PADDLE;
 
-    // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/ppyoloe_plus_crn_l_80e_coco.onnx";
-    // params.modelType = YOLO_PADDLE;
+    params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/ppyoloe_plus_crn_l_80e_coco.onnx";
+    params.modelType = YOLO_PADDLE;
 
     params.imgSize = { 640, 640 };
     

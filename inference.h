@@ -68,7 +68,7 @@ public:
 public:
     char* CreateSession(DL_INIT_PARAM& iParams);
     char* RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult);
-    // char* WarmUpSession();
+    char* WarmUpSession();
 
     // infer function
     template<typename N>
