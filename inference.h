@@ -84,15 +84,11 @@ private:
     //must be class variable,else crush ??? 
     Ort::Env m_env;
     Ort::Session* m_session;
-    bool m_cudaEnable = false;
-    std::vector<const char*> inputNodeNames;
-    std::vector<const char*> outputNodeNames;
+    std::vector<const char*> m_inputNodeNames;
+    std::vector<const char*> m_outputNodeNames;
 
-    MODEL_TYPE modelType;
-    std::vector<int> imgSize;
-    float rectConfidenceThreshold;
-    float iouThreshold;
-    float resizeScales;//letterbox scale
+    DL_INIT_PARAM m_params;
+    float m_resizeScales;//letterbox scale
 
     float m_img_w,m_img_h; // input image size
 };
