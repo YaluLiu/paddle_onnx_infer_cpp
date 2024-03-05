@@ -251,81 +251,69 @@ char* YOLO_V8::YOLO_origin_Process(cv::Mat& iImg, N& blob, std::vector<DL_RESULT
     auto outputTensor = m_session->Run(Ort::RunOptions{ nullptr }, m_inputNodeNames.data(), &inputTensor, 1, m_outputNodeNames.data(),
         m_outputNodeNames.size());
 
+    auto output = outputTensor.front().GetTensorMutableData<typename std::remove_pointer<N>::type>();
+    delete[] blob;
+
+    // outputNodeDims[1,84,8400]
     Ort::TypeInfo typeInfo = outputTensor.front().GetTypeInfo();
     auto tensor_info = typeInfo.GetTensorTypeAndShapeInfo();
     std::vector<int64_t> outputNodeDims = tensor_info.GetShape();
-    auto output = outputTensor.front().GetTensorMutableData<typename std::remove_pointer<N>::type>();
-    delete[] blob;
-    switch (m_params.modelType)
+    int strideNum = outputNodeDims[1];//84
+    int signalResultNum = outputNodeDims[2];//8400
+    std::vector<int> class_ids;
+    std::vector<float> confidences;
+    std::vector<cv::Rect> boxes;
+    cv::Mat rawData;
+    // FP32
+    rawData = cv::Mat(strideNum, signalResultNum, CV_32F, output);
+
+    // // FP16
+    // rawData = cv::Mat(strideNum, signalResultNum, CV_16F, output);
+    // rawData.convertTo(rawData, CV_32F);
+
+    //Note:
+    //ultralytics add transpose operator to the output of yolov8 model.which make yolov8/v5/v7 has same shape
+    //https://github.com/ultralytics/assets/releases/download/v8.1.0/yolov8n.pt
+    //rowData = rowData.t();
+    rawData = rawData.t();
+    float* data = (float*)rawData.data;
+
+    for (int i = 0; i < signalResultNum; ++i)
     {
-    case YOLO_DETECT_V8:
-    case YOLO_DETECT_V8_HALF:
-    {
-        int strideNum = outputNodeDims[1];//84
-        int signalResultNum = outputNodeDims[2];//8400
-        std::vector<int> class_ids;
-        std::vector<float> confidences;
-        std::vector<cv::Rect> boxes;
-        cv::Mat rawData;
-        if (m_params.modelType == YOLO_DETECT_V8)
-        {   
-            // FP32
-            rawData = cv::Mat(strideNum, signalResultNum, CV_32F, output);
-        }
-        else
-        {   
-            // FP16
-            rawData = cv::Mat(strideNum, signalResultNum, CV_16F, output);
-            rawData.convertTo(rawData, CV_32F);
-        }
-        //Note:
-        //ultralytics add transpose operator to the output of yolov8 model.which make yolov8/v5/v7 has same shape
-        //https://github.com/ultralytics/assets/releases/download/v8.1.0/yolov8n.pt
-        //rowData = rowData.t();
-        rawData = rawData.t();
-        float* data = (float*)rawData.data;
-
-        for (int i = 0; i < signalResultNum; ++i)
+        float* classesScores = data + 4;
+        cv::Mat scores(1, this->classes.size(), CV_32FC1, classesScores);
+        cv::Point class_id;
+        double maxClassScore;
+        cv::minMaxLoc(scores, 0, &maxClassScore, 0, &class_id);
+        if (maxClassScore > m_params.rectConfidenceThreshold)
         {
-            float* classesScores = data + 4;
-            cv::Mat scores(1, this->classes.size(), CV_32FC1, classesScores);
-            cv::Point class_id;
-            double maxClassScore;
-            cv::minMaxLoc(scores, 0, &maxClassScore, 0, &class_id);
-            if (maxClassScore > m_params.rectConfidenceThreshold)
-            {
-                confidences.push_back(maxClassScore);
-                class_ids.push_back(class_id.x);
-                float x = data[0];
-                float y = data[1];
-                float w = data[2];
-                float h = data[3];
+            confidences.push_back(maxClassScore);
+            class_ids.push_back(class_id.x);
+            float x = data[0];
+            float y = data[1];
+            float w = data[2];
+            float h = data[3];
 
-                int left = int((x - 0.5 * w) * m_resizeScales);
-                int top = int((y - 0.5 * h) * m_resizeScales);
+            int left = int((x - 0.5 * w) * m_resizeScales);
+            int top = int((y - 0.5 * h) * m_resizeScales);
 
-                int width = int(w * m_resizeScales);
-                int height = int(h * m_resizeScales);
+            int width = int(w * m_resizeScales);
+            int height = int(h * m_resizeScales);
 
-                boxes.push_back(cv::Rect(left, top, width, height));
-            }
-            data += strideNum;
+            boxes.push_back(cv::Rect(left, top, width, height));
         }
-        std::vector<int> nmsResult;
-        cv::dnn::NMSBoxes(boxes, confidences, m_params.rectConfidenceThreshold, m_params.iouThreshold, nmsResult);
-        for (int i = 0; i < nmsResult.size(); ++i)
-        {
-            int idx = nmsResult[i];
-            DL_RESULT result;
-            result.classId = class_ids[idx];
-            result.confidence = confidences[idx];
-            result.box = boxes[idx];
-            oResult.push_back(result);
-        }
-        break;
+        data += strideNum;
     }
-    default:
-        std::cout << "[YOLO_V8]: " << "Not support model type." << std::endl;
+    std::vector<int> nmsResult;
+    cv::dnn::NMSBoxes(boxes, confidences, m_params.rectConfidenceThreshold, m_params.iouThreshold, nmsResult);
+    for (int i = 0; i < nmsResult.size(); ++i)
+    {
+        int idx = nmsResult[i];
+        DL_RESULT result;
+        result.classId = class_ids[idx];
+        result.confidence = confidences[idx];
+        result.box = boxes[idx];
+        oResult.push_back(result);
     }
     return RET_OK;
 
