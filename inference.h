@@ -22,12 +22,15 @@
 enum MODEL_TYPE
 {
     //ultralytics
+    //https://github.com/ultralytics/ultralytics
     YOLO_DETECT_V8 = 1,
 
     //paddledetection-baidu百度飞桨
+    //https://github.com/PaddlePaddle/PaddleDetection
     YOLO_PADDLE=2,
 
     //FLOAT16 MODEL
+    //no use for now
     YOLO_DETECT_V8_HALF = 4,
     YOLO_POSE_V8_HALF = 5,
 };
@@ -60,16 +63,14 @@ class YOLO_V8
 {
 public:
     YOLO_V8();
-
     ~YOLO_V8();
 
 public:
     char* CreateSession(DL_INIT_PARAM& iParams);
-
     char* RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult);
+    // char* WarmUpSession();
 
-    char* WarmUpSession();
-
+    // infer function
     template<typename N>
     char* PaddleProcess(cv::Mat& iImg, N& blob, std::vector<DL_RESULT>& oResult);
     template<typename N>
@@ -80,9 +81,10 @@ public:
     std::vector<std::string> classes{};
 
 private:
-    Ort::Env env;
-    Ort::Session* session;
-    bool cudaEnable = false;
+    //must be class variable,else crush ??? 
+    Ort::Env m_env;
+    Ort::Session* m_session;
+    bool m_cudaEnable = false;
     std::vector<const char*> inputNodeNames;
     std::vector<const char*> outputNodeNames;
 

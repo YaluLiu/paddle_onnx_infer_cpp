@@ -9,7 +9,7 @@ YOLO_V8::YOLO_V8() {
 
 
 YOLO_V8::~YOLO_V8() {
-    delete session;
+    delete m_session;
 }
 
 #ifdef USE_CUDA
@@ -92,11 +92,11 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
         iouThreshold = iParams.iouThreshold;
         imgSize = iParams.imgSize;
         modelType = iParams.modelType;
-        env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "Yolo");
+        m_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "Yolo");
         Ort::SessionOptions sessionOption;
         if (iParams.cudaEnable)
         {
-            cudaEnable = iParams.cudaEnable;
+            m_cudaEnable = iParams.cudaEnable;
             OrtCUDAProviderOptions cudaOption;
             cudaOption.device_id = 0;
             sessionOption.AppendExecutionProvider_CUDA(cudaOption);
@@ -115,21 +115,22 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
         const char* modelPath = iParams.modelPath.c_str();
 #endif // _WIN32
         
-        session = new Ort::Session(env, modelPath, sessionOption);
+        
+        m_session = new Ort::Session(m_env, modelPath, sessionOption);
         Ort::AllocatorWithDefaultOptions allocator;
-        size_t inputNodesNum = session->GetInputCount();
+        size_t inputNodesNum = m_session->GetInputCount();
         for (size_t i = 0; i < inputNodesNum; i++)
         {
-            Ort::AllocatedStringPtr input_node_name = session->GetInputNameAllocated(i, allocator);
+            Ort::AllocatedStringPtr input_node_name = m_session->GetInputNameAllocated(i, allocator);
             char* temp_buf = new char[50];
             strcpy(temp_buf, input_node_name.get());
             inputNodeNames.push_back(temp_buf);
         }
 
-        size_t OutputNodesNum = session->GetOutputCount();
+        size_t OutputNodesNum = m_session->GetOutputCount();
         for (size_t i = 0; i < OutputNodesNum; i++)
         {
-            Ort::AllocatedStringPtr output_node_name = session->GetOutputNameAllocated(i, allocator);
+            Ort::AllocatedStringPtr output_node_name = m_session->GetOutputNameAllocated(i, allocator);
             char* temp_buf = new char[50];
             strcpy(temp_buf, output_node_name.get());
             outputNodeNames.push_back(temp_buf);
@@ -169,23 +170,20 @@ char* YOLO_V8::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
     char* Ret = RET_OK;
     cv::Mat processedImg;
     PreProcess(iImg, imgSize, processedImg);
+    float* blob = new float[processedImg.total() * 3];
+    BlobFromImage(processedImg, blob);
     if (modelType == YOLO_PADDLE) {
-        float* blob = new float[processedImg.total() * 3];
-        BlobFromImage(processedImg, blob);
         PaddleProcess(iImg, blob, oResult);
     }
     else if(modelType == YOLO_DETECT_V8) {
-        float* blob = new float[processedImg.total() * 3];
-        BlobFromImage(processedImg, blob);
         YOLO_origin_Process(iImg, blob, oResult);
-        // std::cout << "YOLO_ORIGIN_MODEL" << std::endl;
     }
-    else {
-        //处理half,FP16
-        half* blob = new half[processedImg.total() * 3];
-        BlobFromImage(processedImg, blob);
-        PaddleProcess(iImg, blob, oResult);
-    }
+    // else {
+    //     //处理half,FP16
+    //     half* blob = new half[processedImg.total() * 3];
+    //     BlobFromImage(processedImg, blob);
+    //     PaddleProcess(iImg, blob, oResult);
+    // }
 
     return Ret;
 }
@@ -215,7 +213,7 @@ char* YOLO_V8::PaddleProcess(cv::Mat& iImg, N& blob, std::vector<DL_RESULT>& oRe
       Ort::Value::CreateTensor<float>(mem_info, const_cast<float*>(input_1_data.data()),
                                       input_1_data.size(), input_1_dims.data(), input_1_dims.size()));
 
-    auto outputTensor = session->Run(options, inputNodeNames.data(), ort_inputs.data(), inputNodeNames.size(),
+    auto outputTensor = m_session->Run(options, inputNodeNames.data(), ort_inputs.data(), inputNodeNames.size(),
                               outputNodeNames.data(), outputNodeNames.size());
 
     // 开始处理输出数据
@@ -263,7 +261,7 @@ char* YOLO_V8::YOLO_origin_Process(cv::Mat& iImg, N& blob, std::vector<DL_RESULT
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU), blob, 3 * imgSize.at(0) * imgSize.at(1),
         inputNodeDims.data(), inputNodeDims.size());
 
-    auto outputTensor = session->Run(Ort::RunOptions{ nullptr }, inputNodeNames.data(), &inputTensor, 1, outputNodeNames.data(),
+    auto outputTensor = m_session->Run(Ort::RunOptions{ nullptr }, inputNodeNames.data(), &inputTensor, 1, outputNodeNames.data(),
         outputNodeNames.size());
 
     Ort::TypeInfo typeInfo = outputTensor.front().GetTypeInfo();
@@ -345,47 +343,3 @@ char* YOLO_V8::YOLO_origin_Process(cv::Mat& iImg, N& blob, std::vector<DL_RESULT
     return RET_OK;
 
 }
-
-
-// char* YOLO_V8::WarmUpSession() {
-//     clock_t starttime_1 = clock();
-//     cv::Mat iImg = cv::Mat(cv::Size(imgSize.at(0), imgSize.at(1)), CV_8UC3);
-//     cv::Mat processedImg;
-//     PreProcess(iImg, imgSize, processedImg);
-//     if (modelType < 4)
-//     {
-//         float* blob = new float[iImg.total() * 3];
-//         BlobFromImage(processedImg, blob);
-//         std::vector<int64_t> YOLO_input_node_dims = { 1, 3, imgSize.at(0), imgSize.at(1) };
-//         Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
-//             Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU), blob, 3 * imgSize.at(0) * imgSize.at(1),
-//             YOLO_input_node_dims.data(), YOLO_input_node_dims.size());
-//         auto output_tensors = session->Run(options, inputNodeNames.data(), &input_tensor, 1, outputNodeNames.data(),
-//             outputNodeNames.size());
-//         delete[] blob;
-//         clock_t starttime_4 = clock();
-//         double post_process_time = (double)(starttime_4 - starttime_1) / CLOCKS_PER_SEC * 1000;
-//         if (cudaEnable)
-//         {
-//             std::cout << "[YOLO_V8(CUDA)]: " << "Cuda warm-up cost " << post_process_time << " ms. " << std::endl;
-//         }
-//     }
-//     else
-//     {
-// #ifdef USE_CUDA
-//         half* blob = new half[iImg.total() * 3];
-//         BlobFromImage(processedImg, blob);
-//         std::vector<int64_t> YOLO_input_node_dims = { 1,3,imgSize.at(0),imgSize.at(1) };
-//         Ort::Value input_tensor = Ort::Value::CreateTensor<half>(Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU), blob, 3 * imgSize.at(0) * imgSize.at(1), YOLO_input_node_dims.data(), YOLO_input_node_dims.size());
-//         auto output_tensors = session->Run(options, inputNodeNames.data(), &input_tensor, 1, outputNodeNames.data(), outputNodeNames.size());
-//         delete[] blob;
-//         clock_t starttime_4 = clock();
-//         double post_process_time = (double)(starttime_4 - starttime_1) / CLOCKS_PER_SEC * 1000;
-//         if (cudaEnable)
-//         {
-//             std::cout << "[YOLO_V8(CUDA)]: " << "Cuda warm-up cost " << post_process_time << " ms. " << std::endl;
-//         }
-// #endif
-//     }
-//     return RET_OK;
-// }

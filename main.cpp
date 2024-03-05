@@ -7,7 +7,7 @@
 
 void Detector(YOLO_V8*& p) {
     std::filesystem::path current_path = std::filesystem::current_path();
-    std::filesystem::path imgs_path ="/home/boli-shixi/yalu/ultralytics/images";
+    std::filesystem::path imgs_path = current_path / "../images";
     
     for (auto& i : std::filesystem::directory_iterator(imgs_path))
     {
