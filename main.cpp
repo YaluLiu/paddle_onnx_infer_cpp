@@ -126,7 +126,7 @@ void DetectTest()
     DL_INIT_PARAM params;
     params.rectConfidenceThreshold = 0.6;
     params.iouThreshold = 0.5;
-    params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8n.onnx";
+    params.modelPath = "../../../models/yolov8n.onnx";
     params.modelType = YOLO_DETECT_V8;
 
     // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8_n_500e_coco.onnx";
