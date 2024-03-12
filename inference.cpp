@@ -159,8 +159,7 @@ char* YOLO_V8::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
     BlobFromImage(processedImg, blob);
     if (m_params.modelType == YOLO_PADDLE) {
         PaddleProcess(iImg, blob, oResult);
-    }
-    else if(m_params.modelType == YOLO_DETECT_V8) {
+    } else if (m_params.modelType == YOLO_DETECT_V8) {
         YOLO_origin_Process(iImg, blob, oResult);
     }
     // else {

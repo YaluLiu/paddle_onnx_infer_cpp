@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(PROJECT_NAME Yolov8OnnxRuntimeCPPInference)
+set(PROJECT_NAME YoloOnnx)
 project(${PROJECT_NAME} VERSION 0.0.1 LANGUAGES CXX)
 
 

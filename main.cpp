@@ -7,8 +7,9 @@
 
 void Detector(YOLO_V8*& p) {
     std::filesystem::path current_path = std::filesystem::current_path();
-    std::filesystem::path imgs_path = current_path / "../images";
+    std::filesystem::path imgs_path = current_path /"../../../images";
     
+    clock_t infer_cost_time = 0;
     for (auto& i : std::filesystem::directory_iterator(imgs_path))
     {
         if (i.path().extension() == ".jpg" || i.path().extension() == ".png" || i.path().extension() == ".jpeg")
@@ -16,7 +17,10 @@ void Detector(YOLO_V8*& p) {
             std::string img_path = i.path().string();
             cv::Mat img = cv::imread(img_path);
             std::vector<DL_RESULT> res;
+            clock_t starttime_start = clock();
             p->RunSession(img, res);
+            clock_t starttime_end = clock();
+            infer_cost_time += (double)(starttime_end - starttime_start) / CLOCKS_PER_SEC * 1000;
 
             for (auto& re : res)
             {
@@ -60,6 +64,8 @@ void Detector(YOLO_V8*& p) {
             cv::imwrite(result_path,img);
         }
     }
+    
+    std::cout << "[YOLO_V8]: " << "infer cost " << infer_cost_time << " ms. " << std::endl;
 }
 
 
@@ -120,14 +126,14 @@ void DetectTest()
     DL_INIT_PARAM params;
     params.rectConfidenceThreshold = 0.6;
     params.iouThreshold = 0.5;
-    // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8n.onnx";
-    // params.modelType = YOLO_DETECT_V8;
+    params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8n.onnx";
+    params.modelType = YOLO_DETECT_V8;
 
     // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/yolov8_n_500e_coco.onnx";
     // params.modelType = YOLO_PADDLE;
 
-    params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/ppyoloe_plus_crn_l_80e_coco.onnx";
-    params.modelType = YOLO_PADDLE;
+    // params.modelPath = "/home/boli-shixi/yalu/ultralytics/models/ppyoloe_plus_crn_l_80e_coco.onnx";
+    // params.modelType = YOLO_PADDLE;
 
     params.imgSize = { 640, 640 };
     
