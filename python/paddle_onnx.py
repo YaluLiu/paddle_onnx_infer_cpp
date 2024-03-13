@@ -30,6 +30,8 @@ class YOLOv8:
         self.inputs=[]
         self.confidence_thres = confidence_thres
         self.iou_thres = iou_thres
+        self.input_height = self.input_width = 0
+        self.img_height = self.img_width = 0
 
         # Load the class names from the COCO dataset
         # self.classes = yaml_load(check_yaml("coco128.yaml"))["names"]
@@ -80,16 +82,6 @@ class YOLOv8:
         cv2.putText(img, label, (label_x, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
 
 
-    def read_input_list(self):
-        origins = []
-        inputs = []
-        for image_path in self.input_paths:
-          image,origin_image = self.preprocess(image_path)
-          inputs.append(image)
-          origins.append(origin_image)
-        return inputs,origins
-
-
     def preprocess(self,input_path):
         """
         Preprocesses the input image before performing inference.
@@ -113,8 +105,8 @@ class YOLOv8:
         image_data = np.transpose(image_data, (2, 0, 1))  # Channel first
 
         # Expand the dimensions of the image data to match the expected input shape
-        # image_data = np.expand_dims(image_data, axis=0).astype(np.float32)
-        image_data = image_data.astype(np.float32)
+        image_data = np.expand_dims(image_data, axis=0).astype(np.float32)
+        # image_data = image_data.astype(np.float32)
 
         # Return the preprocessed image data
         return image_data,origin_image
@@ -193,10 +185,12 @@ class YOLOv8:
     def warmup(self,session):
         batch_size = 1 
         img_data = np.random.rand(batch_size, 3, 640, 640).astype(np.float32)
+        x_factor = 1.0
+        y_factor = 1.0
         inputs_dict = {
             'images': img_data,
-            # 'im_shape': np.array([[self.input_width,self.input_height]],np.float32),
-            # 'scale_factor':np.array([[x_factor,y_factor]],np.float32),
+            'im_shape': np.array([[self.input_width,self.input_height]],np.float32),
+            'scale_factor':np.array([[x_factor,y_factor]],np.float32),
         }
 
         inputs_name = [a.name for a in session.get_inputs()]
@@ -229,36 +223,37 @@ class YOLOv8:
           self.input_width = input_shape[2]
           self.input_height = input_shape[3]
 
-        # x_factor = self.img_width / self.input_width
-        # y_factor = self.img_height / self.input_height
+        x_factor = self.img_width / self.input_width
+        y_factor = self.img_height / self.input_height
 
         # Preprocess the image data
-        imgs,origins = self.read_input_list()
-        img_data = np.array(imgs)
-        # import pdb
-        # pdb.set_trace()
-        # img_data = np.column_stack(imgs)
-        # print(img_data.shape)
-
-        batch_size = 5
-        # img_data = np.random.rand(batch_size, 3, 640, 640).astype(np.float32)
-        inputs_dict = {
-            'images': img_data,
-            # 'im_shape': np.array([[self.input_width,self.input_height]],np.float32),
-            # 'scale_factor':np.array([[x_factor,y_factor]],np.float32),
+        perf_info = {
+          "inputs_num":len(self.input_paths),
+          "resize":0,
+          "infer":0,
         }
 
-        inputs_name = [a.name for a in session.get_inputs()]
-        net_inputs = {k: inputs_dict[k] for k in inputs_name}
+        for img_path in self.input_paths:
+          start = time.time()
+          input_image,origin_image = self.preprocess(img_path)
+          perf_info["resize"] += time.time() - start
+          start = time.time()
 
-        # Run inference using the preprocessed image data
-        start = time.time()
-        outputs = session.run(None, net_inputs)
-        cost = time.time() - start
-        print(f"solve {img_data.shape[0]} images,cost {cost}s.")
-        # print("result:",len(outputs), outputs[0].shape)
-        outputs = outputs[0]
+          inputs_dict = {
+              'images': input_image,
+              'im_shape': np.array([[self.input_width,self.input_height]],np.float32),
+              'scale_factor':np.array([[x_factor,y_factor]],np.float32),
+          }
 
+          inputs_name = [a.name for a in session.get_inputs()]
+          net_inputs = {k: inputs_dict[k] for k in inputs_name}
+
+          # Run inference using the preprocessed image data
+          
+          outputs = session.run(None, net_inputs)
+          perf_info["infer"] += time.time() - start
+          outputs = outputs[0]
+        print(f"paddle_onnx:",perf_info)
         # Perform post-processing on the outputs to obtain output image.
         # for i in range(len(origins)):
         #   # Get the height and width of the input image
@@ -287,10 +282,7 @@ if __name__ == "__main__":
     #           "/usr/src/ultralytics/images/dog_0.jpg",
     #           "/usr/src/ultralytics/images/frame.jpg"]*5
 
-    inputs = ["images/bus.jpg",
-              "images/640bus.jpeg",
-              "images/dog_0.jpg",
-              "images/frame.jpg"]
+    inputs = ["images/bus.jpg"]*10
     detection = YOLOv8(args.model, inputs, args.conf_thres, args.iou_thres)
 
     # Perform object detection and obtain the output image

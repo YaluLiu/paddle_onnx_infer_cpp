@@ -53,6 +53,7 @@ function create() {
     # # Run the ultralytics image in a container with GPU support
     docker run --user root --name ${container_name} --gpus all --shm-size=128g -it --privileged \
        -v ${project_dir}:${work_dir} \
+       -v /home/boli-shixi/yalu/ultralytics/models:${work_dir}/models \
        ${image_name}
     restart
     exec
