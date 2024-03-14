@@ -8,10 +8,6 @@ import torch
 import onnxruntime as ort
 import time
 
-# from ultralytics.utils import ASSETS, yaml_load
-# from ultralytics.utils.checks import check_requirements, check_yaml
-
-
 class YOLOv8:
     """YOLOv8 object detection model class for handling inference and visualization."""
 
@@ -264,23 +260,13 @@ class YOLOv8:
 
 if __name__ == "__main__":
     # Create an argument parser to handle command-line arguments
-    model_name="yolov8n.onnx"
+    model_name="yolov8_n_500e_coco.onnx"
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default=f"models/{model_name}", help="Input your ONNX model.")
     parser.add_argument("--img", type=str, default="/images/bus.jpg", help="Path to input image.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
     args = parser.parse_args()
-
-    # Check the requirements and select the appropriate backend (CPU or GPU)
-    # check_requirements("onnxruntime-gpu" if torch.cuda.is_available() else "onnxruntime")
-    # check_requirements("onnxruntime-gpu" if True else "onnxruntime")
-
-    # Create an instance of the YOLOv8 class with the specified arguments
-    # inputs = ["/usr/src/ultralytics/images/bus.jpg",
-    #           "/usr/src/ultralytics/images/640bus.jpeg",
-    #           "/usr/src/ultralytics/images/dog_0.jpg",
-    #           "/usr/src/ultralytics/images/frame.jpg"]*5
 
     inputs = ["images/bus.jpg"]*10
     detection = YOLOv8(args.model, inputs, args.conf_thres, args.iou_thres)

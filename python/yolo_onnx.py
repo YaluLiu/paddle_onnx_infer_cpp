@@ -8,8 +8,8 @@ import torch
 import onnxruntime as ort
 import time
 
-# from ultralytics.utils import ASSETS, yaml_load
-# from ultralytics.utils.checks import check_requirements, check_yaml
+from ultralytics.utils import ASSETS, yaml_load
+from ultralytics.utils.checks import check_requirements, check_yaml
 
 
 class YOLOv8:
@@ -31,11 +31,11 @@ class YOLOv8:
         self.confidence_thres = confidence_thres
         self.iou_thres = iou_thres
 
-        # Load the class names from the COCO dataset
-        # self.classes = yaml_load(check_yaml("coco128.yaml"))["names"]
+        # # Load the class names from the COCO dataset
+        self.classes = yaml_load(check_yaml("coco128.yaml"))["names"]
 
-        # # Generate a color palette for the classes
-        # self.color_palette = np.random.uniform(0, 255, size=(len(self.classes), 3))
+        # Generate a color palette for the classes
+        self.color_palette = np.random.uniform(0, 255, size=(80, 3))
         
 
     def draw_detections(self, img, box, score, class_id):
@@ -229,17 +229,12 @@ class YOLOv8:
           self.input_width = input_shape[2]
           self.input_height = input_shape[3]
 
-        x_factor = self.img_width / self.input_width
-        y_factor = self.img_height / self.input_height
-
         # Preprocess the image data
         imgs,origins = self.read_input_list()
         img_data = np.array(imgs)
         
         inputs_dict = {
-            'images': img_data,
-            'im_shape': np.array([[self.input_width,self.input_height]],np.float32),
-            'scale_factor':np.array([[x_factor,y_factor]],np.float32),
+            'images': img_data
         }
 
         inputs_name = [a.name for a in session.get_inputs()]
@@ -247,18 +242,20 @@ class YOLOv8:
 
         # Run inference using the preprocessed image data
         start = time.time()
-        outputs = session.run(None, net_inputs)
+        outputs = session.run(None, net_inputs)[0]
         cost = time.time() - start
         print(f"solve {img_data.shape[0]} images,cost {cost}s.")
         # print("result:",len(outputs), outputs[0].shape)
-        outputs = outputs[0]
 
-        # Perform post-processing on the outputs to obtain output image.
-        # for i in range(len(origins)):
-        #   # Get the height and width of the input image
-        #   self.img_height, self.img_width = origins[i].shape[:2]
-        #   vis_image = self.postprocess(origins[i], outputs[i])  # output image
-        #   cv2.imwrite(f"{i}.jpg",vis_image)
+        self.visualize(outputs,origins)
+
+    def visualize(self, outputs, origins):
+      # Perform post-processing on the outputs to obtain output image.
+      for i in range(len(origins)):
+        # Get the height and width of the input image
+        self.img_height, self.img_width = origins[i].shape[:2]
+        vis_image = self.postprocess(origins[i], outputs[i])  # output image
+        cv2.imwrite(f"{args.result_dir}/{i}.jpg",vis_image)
 
 
 if __name__ == "__main__":
@@ -269,17 +266,9 @@ if __name__ == "__main__":
     parser.add_argument("--img", type=str, default="/images/bus.jpg", help="Path to input image.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
+    parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
+    parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
     args = parser.parse_args()
-
-    # Check the requirements and select the appropriate backend (CPU or GPU)
-    # check_requirements("onnxruntime-gpu" if torch.cuda.is_available() else "onnxruntime")
-    # check_requirements("onnxruntime-gpu" if True else "onnxruntime")
-
-    # Create an instance of the YOLOv8 class with the specified arguments
-    # inputs = ["/usr/src/ultralytics/images/bus.jpg",
-    #           "/usr/src/ultralytics/images/640bus.jpeg",
-    #           "/usr/src/ultralytics/images/dog_0.jpg",
-    #           "/usr/src/ultralytics/images/frame.jpg"]*5
 
     inputs = ["images/bus.jpg",
               "images/640bus.jpeg",
