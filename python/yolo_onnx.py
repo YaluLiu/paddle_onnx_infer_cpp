@@ -10,6 +10,7 @@ import time
 
 from ultralytics.utils import ASSETS, yaml_load
 from ultralytics.utils.checks import check_requirements, check_yaml
+from utils import get_test_images
 
 
 class YOLOv8:
@@ -104,7 +105,7 @@ class YOLOv8:
         img = cv2.cvtColor(origin_image, cv2.COLOR_BGR2RGB)
 
         # Resize the image to match the input shape
-        img = cv2.resize(img, (self.input_width, self.input_height))
+        img = cv2.resize(img, (self.input_height, self.input_width))
 
         # Normalize the image data by dividing it by 255.0
         image_data = np.array(img) / 255.0
@@ -254,6 +255,7 @@ class YOLOv8:
       for i in range(len(origins)):
         # Get the height and width of the input image
         self.img_height, self.img_width = origins[i].shape[:2]
+        print(outputs[i].shape)
         vis_image = self.postprocess(origins[i], outputs[i])  # output image
         cv2.imwrite(f"{args.result_dir}/{i}.jpg",vis_image)
 
@@ -263,17 +265,14 @@ if __name__ == "__main__":
     model_name="yolov8n.onnx"
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default=f"models/{model_name}", help="Input your ONNX model.")
-    parser.add_argument("--img", type=str, default="/images/bus.jpg", help="Path to input image.")
+    parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
     parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
     args = parser.parse_args()
 
-    inputs = ["images/bus.jpg",
-              "images/640bus.jpeg",
-              "images/dog_0.jpg",
-              "images/frame.jpg"]
+    inputs = get_test_images(args.source_dir,args.img)
     detection = YOLOv8(args.model, inputs, args.conf_thres, args.iou_thres)
 
     # Perform object detection and obtain the output image

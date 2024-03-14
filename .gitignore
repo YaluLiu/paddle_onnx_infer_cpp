@@ -1,3 +1,6 @@
 build
 onnxruntime-linux-x64-*
 result
+
+images/*
+__pycache__
