@@ -14,9 +14,11 @@ def read_args():
   parser.add_argument("--input_h", type=int, default=640, help="input_h")
   parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
   parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
-  parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
   parser.add_argument("--batch_size", type=int, default=10, help="batch_size")
+  parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
+  parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
   args = parser.parse_args()
+  os.makedirs(args.result_dir,exist_ok=True)
   return args
 
 class YoloSpeed:
@@ -67,6 +69,12 @@ class YoloSpeed:
     net_outputs = self.model.predict(inputs, save=False, imgsz=(self.args.input_h,self.args.input_w), device=0,verbose=False)
     return net_outputs
   
+  def visualize(self,results):
+    for result in results:
+      res_vis = result.plot()
+      result_path = self.args.result_dir + "/" + result.path
+      cv2.imwrite(result_path, res_vis)
+
   def run(self):
     source = self.read_source()
     all_inputs = self.preprocess(source)
@@ -84,9 +92,16 @@ class YoloSpeed:
     batch_size = self.args.batch_size
     batches = [all_inputs[i:i+batch_size] for i in range(0, len(all_inputs), batch_size)]
     for batch in batches:
+      # infer
       start = time.time()
-      net_outputs = self.predict(batch)
+      results = self.predict(batch)
       perf_info["infer"] +=  time.time()-start
+      # vis
+      self.visualize(results)
+      # save result
+      for result in results:
+        print(result.boxes)
+
     return perf_info
     
 
