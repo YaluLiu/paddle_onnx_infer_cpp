@@ -234,13 +234,13 @@ class YOLOv8:
           net_inputs = {k: inputs_dict[k] for k in inputs_name}
 
           # Run inference using the preprocessed image data
-          
           outputs = session.run(None, net_inputs)
           perf_info["infer"] += time.time() - start
 
           outs = np.array(outputs[0])
           expect_boxes = (outs[:, 0] > -1) & (outs[:, 1] > 0.5)
           np_boxes = outs[expect_boxes, :]
+          print(np_boxes)
 
           color_list = self.get_color_map_list(80)
           clsid2color = {}

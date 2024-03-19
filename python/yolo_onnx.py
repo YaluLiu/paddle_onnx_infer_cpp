@@ -11,12 +11,13 @@ import time
 from ultralytics.utils import ASSETS, yaml_load
 from ultralytics.utils.checks import check_requirements, check_yaml
 from utils import get_test_images
+import json
 
 
 class YOLOv8:
     """YOLOv8 object detection model class for handling inference and visualization."""
 
-    def __init__(self, onnx_model, input_images, confidence_thres, iou_thres):
+    def __init__(self, onnx_model, input_images, args):
         """
         Initializes an instance of the YOLOv8 class.
 
@@ -29,17 +30,40 @@ class YOLOv8:
         self.onnx_model = onnx_model
         self.input_paths = input_images
         self.inputs=[]
-        self.confidence_thres = confidence_thres
-        self.iou_thres = iou_thres
+        self.confidence_thres = args.conf_thres
+        self.iou_thres = args.iou_thres
+        self.batch_size = args.batch_size
 
         # # Load the class names from the COCO dataset
         self.classes = yaml_load(check_yaml("coco128.yaml"))["names"]
 
         # Generate a color palette for the classes
         self.color_palette = np.random.uniform(0, 255, size=(80, 3))
+
+        self.create_session()
+    
+    def create_session(self):
+        # Create an inference session using the ONNX model and specify execution providers
+        # "CUDAExecutionProvider"
+        # "CPUExecutionProvider"
+        self.session = ort.InferenceSession(self.onnx_model, providers=["CPUExecutionProvider"])
+        self.warmup()
+        
+        # Get the model inputs
+        model_inputs = self.session.get_inputs()
+
+        # Store the shape of the input for later use
+        input_shape = model_inputs[0].shape
+
+        if isinstance(input_shape[2],str):
+          self.input_width = 640
+          self.input_height = 640
+        else:
+          self.input_width = input_shape[2]
+          self.input_height = input_shape[3]
         
 
-    def draw_detections(self, img, box, score, class_id):
+    def draw_detections(self, img, single_box):
         """
         Draws bounding boxes and labels on the input image based on the detected objects.
 
@@ -54,13 +78,18 @@ class YOLOv8:
         """
 
         # Extract the coordinates of the bounding box
-        x1, y1, w, h = box
+        class_id, score, x1, y1, w, h = single_box
+        class_id = int(class_id)
+        x1 = int(x1)
+        y1 = int(y1)
+        w = int(w)
+        h = int(h)
 
         # Retrieve the color for the class ID
         color = self.color_palette[class_id]
 
         # Draw the bounding box on the image
-        cv2.rectangle(img, (int(x1), int(y1)), (int(x1 + w), int(y1 + h)), color, 2)
+        cv2.rectangle(img, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color, 2)
 
         # Create the label text with class name and score
         label = f"{self.classes[class_id]}: {score:.2f}"
@@ -88,7 +117,10 @@ class YOLOv8:
           image,origin_image = self.preprocess(image_path)
           inputs.append(image)
           origins.append(origin_image)
-        return inputs,origins
+        
+        input_batches = [inputs[i:i+self.batch_size] for i in range(0, len(inputs), self.batch_size)]
+        origin_batches = [origins[i:i+self.batch_size] for i in range(0, len(origins), self.batch_size)]
+        return input_batches,origin_batches
 
 
     def preprocess(self,input_path):
@@ -120,7 +152,7 @@ class YOLOv8:
         # Return the preprocessed image data
         return image_data,origin_image
 
-    def postprocess(self, input_image, output):
+    def postprocess(self, output):
         """
         Performs post-processing on the model's output to extract bounding boxes, scores, and class IDs.
 
@@ -178,102 +210,100 @@ class YOLOv8:
         # Apply non-maximum suppression to filter out overlapping bounding boxes
         indices = cv2.dnn.NMSBoxes(boxes, scores, self.confidence_thres, self.iou_thres)
 
-        # Iterate over the selected indices after non-maximum suppression
+        net_output=[]
         for i in indices:
             # Get the box, score, and class ID corresponding to the index
-            box = boxes[i]
+            x,y,w,h = boxes[i]
             score = scores[i]
             class_id = class_ids[i]
+            net_output.append([class_id,score,x,y,w,h])
+        net_output = np.array(net_output)
+        return net_output
 
-            # Draw the detection on the input image
-            self.draw_detections(input_image, box, score, class_id)
-
-        # Return the modified input image
-        return input_image
-
-    def warmup(self,session):
+    def warmup(self):
         batch_size = 1 
         img_data = np.random.rand(batch_size, 3, 640, 640).astype(np.float32)
         inputs_dict = {
             'images': img_data,
-            # 'im_shape': np.array([[self.input_width,self.input_height]],np.float32),
-            # 'scale_factor':np.array([[x_factor,y_factor]],np.float32),
         }
 
-        inputs_name = [a.name for a in session.get_inputs()]
+        inputs_name = [a.name for a in self.session.get_inputs()]
         net_inputs = {k: inputs_dict[k] for k in inputs_name}
-        outputs = session.run(None, net_inputs)
+        outputs = self.session.run(None, net_inputs)
+
 
     def main(self):
+        json_results = []
+        batches,origins = self.read_input_list()
+        # batch_num*batch_size
+        batch_num = len(batches)
+        for batch_id in range(batch_num):
+            outputs = self.solve_batch(batches[batch_id])
+            for i in range(self.batch_size):
+              # Get the height and width of the input image
+              origin_image = origins[batch_id][i]
+              self.img_height, self.img_width = origin_image.shape[:2]
+              net_outputs = self.postprocess(outputs[i])  # output image
+
+              # 获取文件名
+              input_name = self.input_paths[batch_id*self.batch_size+i]
+              for single_box in net_outputs:
+                self.draw_detections(origin_image, single_box)
+                class_id, score, x1, y1, w, h = single_box
+                single_result = {
+                    "image_name":input_name,
+                    "bbox":[x1,y1,x1+w,y1+h], # can be float
+                    "category_id":int(class_id),
+                    "score":score
+                }
+                json_results.append(single_result)
+
+              cv2.imwrite(f"{args.result_dir}/{i}.jpg",origin_image)
+        
+        json.dump(json_results,open(args.output_json,'w'))
+
+    def solve_batch(self,batch):
         """
         Performs inference using an ONNX model and returns the output image with drawn detections.
 
         Returns:
             output_img: The output image with drawn detections.
         """
-        # Create an inference session using the ONNX model and specify execution providers
-        # "CUDAExecutionProvider"
-        # "CPUExecutionProvider"
-        session = ort.InferenceSession(self.onnx_model, providers=["CUDAExecutionProvider"])
-        self.warmup(session)
-        # Get the model inputs
-        model_inputs = session.get_inputs()
-
-        # Store the shape of the input for later use
-        input_shape = model_inputs[0].shape
-        print("input_shape:",input_shape)
-
-        if isinstance(input_shape[2],str):
-          self.input_width = 640
-          self.input_height = 640
-        else:
-          self.input_width = input_shape[2]
-          self.input_height = input_shape[3]
-
         # Preprocess the image data
-        imgs,origins = self.read_input_list()
-        img_data = np.array(imgs)
+        img_data = np.array(batch)
         
         inputs_dict = {
             'images': img_data
         }
 
-        inputs_name = [a.name for a in session.get_inputs()]
+        inputs_name = [a.name for a in self.session.get_inputs()]
         net_inputs = {k: inputs_dict[k] for k in inputs_name}
 
         # Run inference using the preprocessed image data
         start = time.time()
-        outputs = session.run(None, net_inputs)[0]
+        outputs = self.session.run(None, net_inputs)[0]
         cost = time.time() - start
         print(f"solve {img_data.shape[0]} images,cost {cost}s.")
-        # print("result:",len(outputs), outputs[0].shape)
-
-        self.visualize(outputs,origins)
-
-    def visualize(self, outputs, origins):
-      # Perform post-processing on the outputs to obtain output image.
-      for i in range(len(origins)):
-        # Get the height and width of the input image
-        self.img_height, self.img_width = origins[i].shape[:2]
-        print(outputs[i].shape)
-        vis_image = self.postprocess(origins[i], outputs[i])  # output image
-        cv2.imwrite(f"{args.result_dir}/{i}.jpg",vis_image)
-
+        return outputs
 
 if __name__ == "__main__":
     # Create an argument parser to handle command-line arguments
     model_name="yolov8n.onnx"
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default=f"models/{model_name}", help="Input your ONNX model.")
-    parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
+    parser.add_argument("--batch_size", type=int, default=1, help="batch_size for model input")
+
+    parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
     parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
+    parser.add_argument("--output_json", type=str, default="result.json", help="为了计算map而保存的结果,以json存储")
+    
     args = parser.parse_args()
 
     inputs = get_test_images(args.source_dir,args.img)
-    detection = YOLOv8(args.model, inputs, args.conf_thres, args.iou_thres)
+    detection = YOLOv8(args.model, inputs, args)
 
     # Perform object detection and obtain the output image
     detection.main()
