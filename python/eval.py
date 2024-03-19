@@ -70,8 +70,8 @@ if __name__ == '__main__':
 
     # instances_val2014.json
     parser = argparse.ArgumentParser()
-    parser.add_argument('--log',default="x.json")
-    parser.add_argument('--anno',default="x_val.json")
+    parser.add_argument('--log',default="result.json")
+    parser.add_argument('--anno',default="val.json")
     parser.add_argument('--image-dir',default="")
     args = parser.parse_args()
 
@@ -82,10 +82,9 @@ if __name__ == '__main__':
     # imgIds=sorted(coco_gt.getImgIds())
     # imgIds=imgIds[0:100]
     # imgIds = [42,73,74,133]
-    coco_eval.params.imgIds  = [3]
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
-    # results = COCOResults('bbox')
-    # results.update(coco_eval)
-    # print(results)
+    results = COCOResults('bbox')
+    results.update(coco_eval)
+    print(results)

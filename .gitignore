@@ -4,3 +4,5 @@ result
 
 images/*
 __pycache__
+
+*.json

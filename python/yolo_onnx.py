@@ -254,13 +254,49 @@ class YOLOv8:
                     "image_name":input_name,
                     "bbox":[x1,y1,x1+w,y1+h], # can be float
                     "category_id":int(class_id),
-                    "score":score
+                    "score":round(score,2)
                 }
                 json_results.append(single_result)
 
               cv2.imwrite(f"{args.result_dir}/{i}.jpg",origin_image)
+
+        with open("instances_val2014.json","r") as f:
+            instances_example_json = json.load(f)
         
-        json.dump(json_results,open(args.output_json,'w'))
+        gt_json = {"images":[],"annotations":[],"categories":instances_example_json["categories"]}
+
+        image_id = 0
+        anno_id = 0
+        image_prev_name = None
+        for x in json_results:
+            image_now_name =  x["image_name"]
+            if image_prev_name is None:
+                image_prev_name = image_now_name
+                image_id = 0
+            elif image_prev_name == image_now_name:
+                image_id+=1
+                image_prev_name = image_now_name
+            image_json={
+                "id":image_id,
+                "image_path":x["image_name"]
+              }
+            x1,y1,x2,y2 = x["bbox"]
+            annotation_json = {
+                "image_id":image_id,
+                "bbox": x["bbox"],
+                "category_id": x["category_id"],
+                "score": x["score"],
+                "id":anno_id,
+                "iscrowd":False,
+                "segmentation": [[]],
+                "area":(x2-x1)*(y2-y1)
+                }
+            gt_json["images"].append(image_json)
+            gt_json["annotations"].append(annotation_json)
+            anno_id+=1
+        json.dump(gt_json,open("val.json",'w'))
+        json.dump(gt_json["annotations"],open("result.json",'w'))
+
 
     def solve_batch(self,batch):
         """
