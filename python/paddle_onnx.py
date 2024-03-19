@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import onnxruntime as ort
 import time
-from utils import get_test_images
+from utils import get_test_images,read_images_from_gt
 import json
 
 from ultralytics.utils import ASSETS, yaml_load
@@ -28,8 +28,10 @@ class YOLOv8:
         """
         self.args = args
         self.onnx_model = args.model
-        self.input_paths = get_test_images(args.source_dir,args.img)
-        self.inputs=[]
+        if args.gt_json_path:
+          self.input_images = read_images_from_gt(args.gt_json_path)
+        else:
+          self.input_images = get_test_images(args.source_dir,args.img)
         self.confidence_thres = args.conf_thres
         self.iou_thres = args.iou_thres
         self.input_height = self.input_width = 0
@@ -175,14 +177,16 @@ class YOLOv8:
 
         # Preprocess the image data
         perf_info = {
-          "inputs_num":len(self.input_paths),
+          "inputs_num":len(self.input_images),
           "resize":0,
           "infer":0,
         }
 
         dt_json_list = []
         anno_id = 0
-        for img_path in self.input_paths:
+        for input_image in self.input_images:
+          img_path = input_image["image_path"]
+          img_id = input_image["id"]
           start = time.time()
           input_image = self.preprocess(img_path)
           perf_info["resize"] += time.time() - start
@@ -213,8 +217,9 @@ class YOLOv8:
                 "bbox": [int(x0),int(y0),int(x1),int(y1)],
                 "category_id": int(classid),
                 "score": round(float(conf),2),
-                "id":anno_id
-                }
+                "id":anno_id,
+                "image_id":img_id,
+              }
               anno_id+=1
               dt_json_list.append(anno_json)
           
@@ -258,6 +263,7 @@ if __name__ == "__main__":
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
 
     parser.add_argument("--img", type=str, default=None, help="Path to input image.")
+    parser.add_argument("--gt_json_path", type=str, default=f"val.json", help="input dir")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
     parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
     parser.add_argument("--output_json", type=str, default="result.json", help="为了计算map而保存的结果,以json存储")

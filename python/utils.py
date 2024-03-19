@@ -1,5 +1,6 @@
 import os
 import glob
+import json
 
 def get_test_images(infer_dir, infer_img):
     """
@@ -30,3 +31,11 @@ def get_test_images(infer_dir, infer_img):
     print("Found {} inference images in total.".format(len(images)))
 
     return images
+
+def read_images_from_gt(gt_file_path):
+    gt_data = json.load(open(gt_file_path,"r"))
+    return gt_data["images"]
+    
+
+if __name__ == "__main__":
+    read_images_from_gt("val.json")

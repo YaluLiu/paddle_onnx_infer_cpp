@@ -270,12 +270,14 @@ class YOLOv8:
         image_prev_name = None
         for x in json_results:
             image_now_name =  x["image_name"]
-            if image_prev_name is None:
-                image_prev_name = image_now_name
-                image_id = 0
-            elif image_prev_name == image_now_name:
+            if image_prev_name != image_now_name:
                 image_id+=1
                 image_prev_name = image_now_name
+                flag_save_image_json = True
+            else:
+                flag_save_image_json = False
+            
+            
             image_json={
                 "id":image_id,
                 "image_path":x["image_name"]
@@ -291,7 +293,8 @@ class YOLOv8:
                 "segmentation": [[]],
                 "area":(x2-x1)*(y2-y1)
                 }
-            gt_json["images"].append(image_json)
+            if flag_save_image_json:
+              gt_json["images"].append(image_json)
             gt_json["annotations"].append(annotation_json)
             anno_id+=1
         json.dump(gt_json,open("val.json",'w'))
@@ -330,7 +333,7 @@ if __name__ == "__main__":
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
     parser.add_argument("--batch_size", type=int, default=1, help="batch_size for model input")
-    
+
     parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
     parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
