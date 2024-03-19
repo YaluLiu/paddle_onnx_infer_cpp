@@ -62,12 +62,6 @@ class COCOResults(object):
  
  
 if __name__ == '__main__':
-    # with open("x.json", 'r') as f:
-    #   temp = json.loads(f.read())
-    #   print(temp)
-    #   import pdb
-    #   pdb.set_trace()
-
     # instances_val2014.json
     parser = argparse.ArgumentParser()
     parser.add_argument('--log',default="result.json")

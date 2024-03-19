@@ -330,7 +330,7 @@ if __name__ == "__main__":
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
     parser.add_argument("--batch_size", type=int, default=1, help="batch_size for model input")
-
+    
     parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
     parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")

@@ -8,6 +8,7 @@ import torch
 import onnxruntime as ort
 import time
 from utils import get_test_images
+import json
 
 from ultralytics.utils import ASSETS, yaml_load
 from ultralytics.utils.checks import check_requirements, check_yaml
@@ -15,7 +16,7 @@ from ultralytics.utils.checks import check_requirements, check_yaml
 class YOLOv8:
     """YOLOv8 object detection model class for handling inference and visualization."""
 
-    def __init__(self, onnx_model, input_images, confidence_thres, iou_thres):
+    def __init__(self, args):
         """
         Initializes an instance of the YOLOv8 class.
 
@@ -25,11 +26,12 @@ class YOLOv8:
             confidence_thres: Confidence threshold for filtering detections.
             iou_thres: IoU (Intersection over Union) threshold for non-maximum suppression.
         """
-        self.onnx_model = onnx_model
-        self.input_paths = input_images
+        self.args = args
+        self.onnx_model = args.model
+        self.input_paths = get_test_images(args.source_dir,args.img)
         self.inputs=[]
-        self.confidence_thres = confidence_thres
-        self.iou_thres = iou_thres
+        self.confidence_thres = args.conf_thres
+        self.iou_thres = args.iou_thres
         self.input_height = self.input_width = 0
         self.img_height = self.img_width = 0
 
@@ -38,6 +40,7 @@ class YOLOv8:
 
         # Generate a color palette for the classes
         self.color_palette = np.random.uniform(0, 255, size=(len(self.classes), 3))
+        self.create_session()
         
 
     def draw_detections(self, img, box, score, class_id):
@@ -128,46 +131,7 @@ class YOLOv8:
         color_map = [color_map[i:i + 3] for i in range(0, len(color_map), 3)]
         return color_map
 
-    def postprocess(self, input_image, output):
-        """
-        Performs post-processing on the model's output to extract bounding boxes, scores, and class IDs.
-
-        Args:
-            input_image (numpy.ndarray): The input image.
-            output (numpy.ndarray): The output of the model.
-
-        Returns:
-            numpy.ndarray: The input image with detections drawn on it.
-        """
-        output = np.array(output)
-        expect_boxes = (output[:, 0] > -1) & (output[:, 1] > 0.5)
-        np_boxes = output[expect_boxes, :]
-
-        color_list = self.get_color_map_list(80)
-        clsid2color = {}
-        srcimg = input_image
-
-        for i in range(np_boxes.shape[0]):
-            classid, conf = int(np_boxes[i, 0]), np_boxes[i, 1]
-            xmin, ymin, xmax, ymax = int(np_boxes[i, 2]), int(np_boxes[i, 3]), int(np_boxes[i, 4]), int(np_boxes[i, 5])
-
-            if classid not in clsid2color:
-                clsid2color[classid] = color_list[classid]
-            color = tuple(clsid2color[classid])
-
-            cv2.rectangle(
-                srcimg, (xmin, ymin), (xmax, ymax), color, thickness=2)
-
-            cv2.putText(
-                srcimg,
-                self.classes[classid] + ':' + str(round(conf, 3)), (xmin,
-                                                                    ymin - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8, (0, 255, 0),
-                thickness=2)
-        return srcimg
-
-    def warmup(self,session):
+    def warmup(self):
         batch_size = 1 
         img_data = np.random.rand(batch_size, 3, 640, 640).astype(np.float32)
         x_factor = 1.0
@@ -178,24 +142,15 @@ class YOLOv8:
             'scale_factor':np.array([[x_factor,y_factor]],np.float32),
         }
 
-        inputs_name = [a.name for a in session.get_inputs()]
+        inputs_name = [a.name for a in self.session.get_inputs()]
         net_inputs = {k: inputs_dict[k] for k in inputs_name}
-        outputs = session.run(None, net_inputs)
+        outputs = self.session.run(None, net_inputs)
 
-    def main(self):
-        """
-        Performs inference using an ONNX model and returns the output image with drawn detections.
-
-        Returns:
-            output_img: The output image with drawn detections.
-        """
-        # Create an inference session using the ONNX model and specify execution providers
-        # "CUDAExecutionProvider"
-        # "CPUExecutionProvider"
-        session = ort.InferenceSession(self.onnx_model, providers=["CUDAExecutionProvider"])
-        self.warmup(session)
+    def create_session(self):
+        self.session = ort.InferenceSession(self.onnx_model, providers=["CUDAExecutionProvider"])
+        self.warmup()
         # Get the model inputs
-        model_inputs = session.get_inputs()
+        model_inputs = self.session.get_inputs()
 
         # Store the shape of the input for later use
         input_shape = model_inputs[0].shape
@@ -207,7 +162,16 @@ class YOLOv8:
           self.input_width = input_shape[2]
           self.input_height = input_shape[3]
 
+    def main(self):
+        """
+        Performs inference using an ONNX model and returns the output image with drawn detections.
 
+        Returns:
+            output_img: The output image with drawn detections.
+        """
+        # Create an inference session using the ONNX model and specify execution providers
+        # "CUDAExecutionProvider"
+        # "CPUExecutionProvider"
 
         # Preprocess the image data
         perf_info = {
@@ -216,6 +180,8 @@ class YOLOv8:
           "infer":0,
         }
 
+        dt_json_list = []
+        anno_id = 0
         for img_path in self.input_paths:
           start = time.time()
           input_image = self.preprocess(img_path)
@@ -230,23 +196,32 @@ class YOLOv8:
               'scale_factor':np.array([[y_factor,x_factor]],np.float32),
           }
 
-          inputs_name = [a.name for a in session.get_inputs()]
+          inputs_name = [a.name for a in self.session.get_inputs()]
           net_inputs = {k: inputs_dict[k] for k in inputs_name}
 
           # Run inference using the preprocessed image data
-          outputs = session.run(None, net_inputs)
+          outputs = self.session.run(None, net_inputs)
           perf_info["infer"] += time.time() - start
 
           outs = np.array(outputs[0])
-          expect_boxes = (outs[:, 0] > -1) & (outs[:, 1] > 0.5)
+          expect_boxes = (outs[:, 0] > -1) & (outs[:, 1] > self.confidence_thres)
           np_boxes = outs[expect_boxes, :]
-          print(np_boxes)
 
+          for i in range(np_boxes.shape[0]):
+              classid, conf,x0,y0,x1,y1 = np_boxes[i]
+              anno_json = {
+                "bbox": [int(x0),int(y0),int(x1),int(y1)],
+                "category_id": int(classid),
+                "score": round(float(conf),2),
+                "id":anno_id
+                }
+              anno_id+=1
+              dt_json_list.append(anno_json)
+          
           color_list = self.get_color_map_list(80)
           clsid2color = {}
 
           srcimg = cv2.imread(img_path)
-
           for i in range(np_boxes.shape[0]):
               classid, conf = int(np_boxes[i, 0]), np_boxes[i, 1]
               xmin, ymin, xmax, ymax = int(np_boxes[i, 2]), int(np_boxes[
@@ -271,6 +246,7 @@ class YOLOv8:
           cv2.imwrite(f"result/{img_name}",srcimg)
 
         print(f"paddle_onnx:",perf_info)
+        json.dump(dt_json_list,open(self.args.output_json,'w'))
         # Perform post-processing on the outputs to obtain output image.
 
 if __name__ == "__main__":
@@ -278,15 +254,16 @@ if __name__ == "__main__":
     model_name="yolov8_n_500e_coco.onnx"
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default=f"models/{model_name}", help="Input your ONNX model.")
-    parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
+
+    parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
     parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
-    args = parser.parse_args()
+    parser.add_argument("--output_json", type=str, default="result.json", help="为了计算map而保存的结果,以json存储")
 
-    inputs = get_test_images(args.source_dir,args.img)
-    detection = YOLOv8(args.model, inputs, args.conf_thres, args.iou_thres)
+    args = parser.parse_args()
+    detection = YOLOv8(args)
 
     # Perform object detection and obtain the output image
     detection.main()
