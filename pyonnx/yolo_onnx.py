@@ -10,14 +10,14 @@ import time
 
 from ultralytics.utils import ASSETS, yaml_load
 from ultralytics.utils.checks import check_requirements, check_yaml
-from utils import get_test_images
+from utils import read_images_from_gt,BenchMark
 import json
 
 
 class YOLOv8:
     """YOLOv8 object detection model class for handling inference and visualization."""
 
-    def __init__(self, onnx_model, input_images, args):
+    def __init__(self, args):
         """
         Initializes an instance of the YOLOv8 class.
 
@@ -27,9 +27,10 @@ class YOLOv8:
             confidence_thres: Confidence threshold for filtering detections.
             iou_thres: IoU (Intersection over Union) threshold for non-maximum suppression.
         """
-        self.onnx_model = onnx_model
-        self.input_paths = input_images
-        self.inputs=[]
+        self.onnx_model = args.model
+        self.image_info_list = read_images_from_gt(args.gt_json_path)
+        self.bench_mark = BenchMark(args.gt_json_path,"yolo")
+
         self.confidence_thres = args.conf_thres
         self.iou_thres = args.iou_thres
         self.batch_size = args.batch_size
@@ -113,7 +114,9 @@ class YOLOv8:
     def read_input_list(self):
         origins = []
         inputs = []
-        for image_path in self.input_paths:
+        for image_info in self.image_info_list:
+          image_name = image_info["file_name"]
+          image_path = f"dataset/images/{image_name}"
           image,origin_image = self.preprocess(image_path)
           inputs.append(image)
           origins.append(origin_image)
@@ -233,72 +236,37 @@ class YOLOv8:
 
 
     def main(self):
-        json_results = []
+        self.bench_mark.start()
         batches,origins = self.read_input_list()
+        self.bench_mark.end("prev")
+
         # batch_num*batch_size
         batch_num = len(batches)
         for batch_id in range(batch_num):
-            outputs = self.solve_batch(batches[batch_id])
-            for i in range(self.batch_size):
+            batch_images = batches[batch_id]
+            self.bench_mark.start()
+            outputs = self.solve_batch(batch_images)
+            self.bench_mark.end("infer")
+
+            for i in range(len(batch_images)):
               # Get the height and width of the input image
               origin_image = origins[batch_id][i]
               self.img_height, self.img_width = origin_image.shape[:2]
+
+              self.bench_mark.start()
               net_outputs = self.postprocess(outputs[i])  # output image
+              self.bench_mark.end("post")
 
               # 获取文件名
-              input_name = self.input_paths[batch_id*self.batch_size+i]
+              image_info = self.image_info_list[batch_id*self.batch_size+i]
+              image_name = image_info["file_name"]
               for single_box in net_outputs:
                 self.draw_detections(origin_image, single_box)
-                class_id, score, x1, y1, w, h = single_box
-                single_result = {
-                    "image_name":input_name,
-                    "bbox":[x1,y1,x1+w,y1+h], # can be float
-                    "category_id":int(class_id),
-                    "score":round(score,2)
-                }
-                json_results.append(single_result)
+                self.bench_mark.update_dt_anno(image_info["id"],single_box)
 
-              cv2.imwrite(f"{args.result_dir}/{i}.jpg",origin_image)
+              cv2.imwrite(f"dataset/result/{image_name}",origin_image)
+        self.bench_mark.save()
 
-        with open("instances_val2014.json","r") as f:
-            instances_example_json = json.load(f)
-        
-        gt_json = {"images":[],"annotations":[],"categories":instances_example_json["categories"]}
-
-        image_id = 0
-        anno_id = 0
-        image_prev_name = None
-        for x in json_results:
-            image_now_name =  x["image_name"]
-            if image_prev_name != image_now_name:
-                image_id+=1
-                image_prev_name = image_now_name
-                flag_save_image_json = True
-            else:
-                flag_save_image_json = False
-            
-            
-            image_json={
-                "id":image_id,
-                "image_path":x["image_name"]
-              }
-            x1,y1,x2,y2 = x["bbox"]
-            annotation_json = {
-                "image_id":image_id,
-                "bbox": x["bbox"],
-                "category_id": x["category_id"],
-                "score": x["score"],
-                "id":anno_id,
-                "iscrowd":False,
-                "segmentation": [[]],
-                "area":(x2-x1)*(y2-y1)
-                }
-            if flag_save_image_json:
-              gt_json["images"].append(image_json)
-            gt_json["annotations"].append(annotation_json)
-            anno_id+=1
-        json.dump(gt_json,open("val.json",'w'))
-        json.dump(gt_json["annotations"],open("result.json",'w'))
 
 
     def solve_batch(self,batch):
@@ -308,7 +276,6 @@ class YOLOv8:
         Returns:
             output_img: The output image with drawn detections.
         """
-        # Preprocess the image data
         img_data = np.array(batch)
         
         inputs_dict = {
@@ -319,10 +286,7 @@ class YOLOv8:
         net_inputs = {k: inputs_dict[k] for k in inputs_name}
 
         # Run inference using the preprocessed image data
-        start = time.time()
         outputs = self.session.run(None, net_inputs)[0]
-        cost = time.time() - start
-        print(f"solve {img_data.shape[0]} images,cost {cost}s.")
         return outputs
 
 if __name__ == "__main__":
@@ -337,12 +301,12 @@ if __name__ == "__main__":
     parser.add_argument("--img", type=str, default=None, help="Path to input image.")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
     parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
-    parser.add_argument("--output_json", type=str, default="result.json", help="为了计算map而保存的结果,以json存储")
+    parser.add_argument("--gt_json_path", type=str, default="dataset/annotations/instances_default.json", help="input dir")
     
     args = parser.parse_args()
 
-    inputs = get_test_images(args.source_dir,args.img)
-    detection = YOLOv8(args.model, inputs, args)
+    
+    detection = YOLOv8(args)
 
     # Perform object detection and obtain the output image
     detection.main()

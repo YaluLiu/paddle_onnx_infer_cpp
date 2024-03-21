@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import onnxruntime as ort
 import time
-from utils import get_test_images,read_images_from_gt
+from utils import BenchMark,read_images_from_gt
 import json
 
 from ultralytics.utils import ASSETS, yaml_load
@@ -28,14 +28,12 @@ class YOLOv8:
         """
         self.args = args
         self.onnx_model = args.model
-        if args.gt_json_path:
-          self.input_images = read_images_from_gt(args.gt_json_path)
-        else:
-          self.input_images = get_test_images(args.source_dir,args.img)
+        self.image_info_list = read_images_from_gt(args.gt_json_path)
         self.confidence_thres = args.conf_thres
         self.iou_thres = args.iou_thres
         self.input_height = self.input_width = 0
         self.img_height = self.img_width = 0
+        self.bench_mark = BenchMark(args.gt_json_path,"paddle")
 
         # Load the class names from the COCO dataset
         self.classes = yaml_load(check_yaml("coco128.yaml"))["names"]
@@ -175,27 +173,22 @@ class YOLOv8:
         # "CUDAExecutionProvider"
         # "CPUExecutionProvider"
 
-        # Preprocess the image data
-        perf_info = {
-          "inputs_num":len(self.input_images),
-          "resize":0,
-          "infer":0,
-        }
-
         dt_json_list = []
         anno_id = 0
-        for input_image in self.input_images:
-          img_path = input_image["image_path"]
-          img_id = input_image["id"]
-          start = time.time()
-          input_image = self.preprocess(img_path)
-          perf_info["resize"] += time.time() - start
-          start = time.time()
+        for image_info in self.image_info_list:
+          image_name = image_info["file_name"]
+          image_path = f"dataset/images/{image_name}"
+          image_id = image_info["id"] 
 
+          self.bench_mark.start()
+          image = self.preprocess(image_path)
+          self.bench_mark.end("prev")
+
+          self.bench_mark.start()
           x_factor = self.input_width /  self.img_width
           y_factor = self.input_height / self.img_height
           inputs_dict = {
-              'image': input_image,
+              'image': image,
               'im_shape': np.array([[self.input_width,self.input_height]],np.float32),
               'scale_factor':np.array([[y_factor,x_factor]],np.float32),
           }
@@ -205,7 +198,7 @@ class YOLOv8:
 
           # Run inference using the preprocessed image data
           outputs = self.session.run(None, net_inputs)
-          perf_info["infer"] += time.time() - start
+          self.bench_mark.end("infer")
 
           outs = np.array(outputs[0])
           expect_boxes = (outs[:, 0] > -1) & (outs[:, 1] > self.confidence_thres)
@@ -213,12 +206,15 @@ class YOLOv8:
 
           for i in range(np_boxes.shape[0]):
               classid, conf,x0,y0,x1,y1 = np_boxes[i]
+              w = x1-x0
+              h = y1-y0
+              single_box = [classid,conf,x0,y0,w,h]
+              self.bench_mark.update_dt_anno(image_id,single_box)
               anno_json = {
-                "bbox": [int(x0),int(y0),int(x1),int(y1)],
+                "bbox": [int(x0),int(y0),int(x1-x0),int(y1-y0)],
                 "category_id": int(classid),
                 "score": round(float(conf),2),
-                "id":anno_id,
-                "image_id":img_id,
+                "image_id":image_id,
               }
               anno_id+=1
               dt_json_list.append(anno_json)
@@ -226,7 +222,7 @@ class YOLOv8:
           color_list = self.get_color_map_list(80)
           clsid2color = {}
 
-          srcimg = cv2.imread(img_path)
+          srcimg = cv2.imread(image_path)
           for i in range(np_boxes.shape[0]):
               classid, conf = int(np_boxes[i, 0]), np_boxes[i, 1]
               xmin, ymin, xmax, ymax = int(np_boxes[i, 2]), int(np_boxes[
@@ -247,12 +243,10 @@ class YOLOv8:
                   0.8, (0, 255, 0),
                   thickness=2)
 
-          img_name = img_path.split("/")[-1]
-          cv2.imwrite(f"result/{img_name}",srcimg)
+          img_name = image_path.split("/")[-1]
+          cv2.imwrite(f"dataset/result/{img_name}",srcimg)
 
-        print(f"paddle_onnx:",perf_info)
-        json.dump(dt_json_list,open(self.args.output_json,'w'))
-        # Perform post-processing on the outputs to obtain output image.
+        self.bench_mark.save()
 
 if __name__ == "__main__":
     # Create an argument parser to handle command-line arguments
@@ -263,10 +257,9 @@ if __name__ == "__main__":
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
 
     parser.add_argument("--img", type=str, default=None, help="Path to input image.")
-    parser.add_argument("--gt_json_path", type=str, default=f"val.json", help="input dir")
+    parser.add_argument("--gt_json_path", type=str, default="dataset/annotations/instances_default.json", help="input dir")
     parser.add_argument("--source_dir", type=str, default=f"images", help="input dir")
-    parser.add_argument("--result_dir", type=str, default="result", help="visualize result dir")
-    parser.add_argument("--output_json", type=str, default="result.json", help="为了计算map而保存的结果,以json存储")
+    parser.add_argument("--result_dir", type=str, default="dataset/result", help="visualize result dir")
 
     args = parser.parse_args()
     detection = YOLOv8(args)

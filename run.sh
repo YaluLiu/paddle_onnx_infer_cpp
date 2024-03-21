@@ -28,6 +28,15 @@ function run(){
   cd ..
 }
 
+# bash eval paddle or yolo
+function eval(){
+  dataset_dir="dataset"
+  anno_dir=${dataset_dir}/annotations
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/instances_default_dt_yolo.json
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/instances_default_dt_paddle.json
+}
+
+
 #-------------------------------------------------------
 # docker container command
 #-------------------------------------------------------
@@ -45,8 +54,21 @@ function stop() {
   docker rm ${container_name}
 }
 
-local_data_path=""
-data_path=""
+
+local_dir="dataset"
+function mount() {
+  server_name="yalu"
+  server_pwd="liuyalu4545"
+  local_name="boli-shixi"
+  server_dir="//192.168.203.3/BoLiTech/RDTeam/01_BDAI/标准测试集/标准数据集01"
+
+  sudo mount -t cifs -o rw,uid=${local_name},user=${server_name},pass=${server_pwd} ${server_dir} ${local_dir}
+}
+
+function umount() {
+  umount ${local_dir}
+}
+
 # -p 8888:8888 \
 function create() {
     stop

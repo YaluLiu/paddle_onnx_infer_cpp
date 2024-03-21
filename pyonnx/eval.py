@@ -64,14 +64,14 @@ class COCOResults(object):
 if __name__ == '__main__':
     # instances_val2014.json
     parser = argparse.ArgumentParser()
-    parser.add_argument('--log',default="result.json")
-    parser.add_argument('--anno',default="val.json")
+    parser.add_argument('--dt',default=".json")
+    parser.add_argument('--gt',default=".json")
     parser.add_argument('--image-dir',default="")
     args = parser.parse_args()
 
 
-    coco_gt = COCO(args.anno)
-    coco_dt = coco_gt.loadRes(args.log)
+    coco_gt = COCO(args.gt)
+    coco_dt = coco_gt.loadRes(args.dt)
     coco_eval = COCOeval(coco_gt, coco_dt, 'bbox')
     # imgIds=sorted(coco_gt.getImgIds())
     # imgIds=imgIds[0:100]
@@ -79,6 +79,6 @@ if __name__ == '__main__':
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
-    results = COCOResults('bbox')
-    results.update(coco_eval)
-    print(results)
+    # results = COCOResults('bbox')
+    # results.update(coco_eval)
+    # print(results)
