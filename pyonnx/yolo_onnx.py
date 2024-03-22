@@ -1,5 +1,11 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
+import os, sys
+# add python path of PaddleDetection to sys.path
+parent_path = os.path.abspath(".")
+if parent_path not in sys.path:
+    sys.path.append(parent_path)
+
 import argparse
 
 import cv2
@@ -8,7 +14,7 @@ import torch
 import onnxruntime as ort
 import time
 
-from utils import read_images_from_gt,BenchMark,CocoWorker
+from pyonnx.utils import read_images_from_gt,BenchMark,CocoWorker
 
 
 class YOLOv8:

@@ -1,4 +1,9 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
+import os, sys
+# add python path of PaddleDetection to sys.path
+parent_path = os.path.abspath(".")
+if parent_path not in sys.path:
+    sys.path.append(parent_path)
 
 import argparse
 
@@ -6,9 +11,7 @@ import cv2
 import numpy as np
 import torch
 import onnxruntime as ort
-import time
-from utils import BenchMark,read_images_from_gt,CocoWorker
-import json
+from pyonnx.utils import BenchMark,read_images_from_gt,CocoWorker
 
 class YOLOv8:
     """YOLOv8 object detection model class for handling inference and visualization."""
@@ -30,7 +33,8 @@ class YOLOv8:
         self.iou_thres = args.iou_thres
         self.input_height = self.input_width = 0
         self.img_height = self.img_width = 0
-        self.bench_mark = BenchMark(args.gt_json_path,"paddle_onnx")
+        self.batch_size = 1
+        self.bench_mark = BenchMark(self.batch_size,"paddle_onnx")
         self.coco_worker = CocoWorker()
         self.create_session()
 
@@ -66,23 +70,8 @@ class YOLOv8:
         # Return the preprocessed image data
         return image_data
 
-    def get_color_map_list(self, num_classes):
-        color_map = num_classes * [0, 0, 0]
-        for i in range(0, num_classes):
-            j = 0
-            lab = i
-            while lab:
-                color_map[i * 3] |= (((lab >> 0) & 1) << (7 - j))
-                color_map[i * 3 + 1] |= (((lab >> 1) & 1) << (7 - j))
-                color_map[i * 3 + 2] |= (((lab >> 2) & 1) << (7 - j))
-                j += 1
-                lab >>= 3
-        color_map = [color_map[i:i + 3] for i in range(0, len(color_map), 3)]
-        return color_map
-
     def warmup(self):
-        batch_size = 1 
-        img_data = np.random.rand(batch_size, 3, 640, 640).astype(np.float32)
+        img_data = np.random.rand(self.batch_size, 3, 640, 640).astype(np.float32)
         x_factor = 1.0
         y_factor = 1.0
         inputs_dict = {

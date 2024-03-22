@@ -142,11 +142,13 @@ def make_fake_anno(json_results):
 
 
 class BenchMark():
-  def __init__(self, gt_json_path,model_type):
-    self.dt_json_path = gt_json_path.replace(f"dt_{model_type}.json")
-    self.perf_json_path = gt_json_path.replace(f"perf_{model_type}.json")
+  def __init__(self, batch_size,model_type):
+    self.dt_json_path = f"dt_{model_type}.json"
+    self.perf_json_path = f"perf_{model_type}.json"
     self.dt_box_list = []
     self.perf_info = {
+      "batch_size":batch_size,
+      "type":model_type,
       "prev":0,
       "infer":0,
       "post":0,
@@ -176,7 +178,8 @@ class BenchMark():
 
   def save(self):
     save_json(self.dt_box_list, self.dt_json_path)
-    save_json(self.perf_info,   self.perf_json_path)
+    with open(self.perf_json_path,"w") as f:
+      json.dump(self.perf_info,f,indent=2)
 
 
 class CocoWorker():
@@ -202,6 +205,7 @@ class CocoWorker():
       # Extract the coordinates of the bounding box
       class_id, score, x1, y1, w, h = single_box
       class_id = int(class_id)
+      score = round(float(score),2)
       x1 = int(x1)
       y1 = int(y1)
       w = int(w)
