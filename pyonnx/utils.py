@@ -2,6 +2,8 @@ import os
 import glob
 import json
 import time
+import numpy as np
+import cv2
 
 def read_json(json_path):
   with open(json_path,"r") as f:
@@ -141,8 +143,8 @@ def make_fake_anno(json_results):
 
 class BenchMark():
   def __init__(self, gt_json_path,model_type):
-    self.dt_json_path = gt_json_path.replace(".json",f"_dt_{model_type}.json")
-    self.perf_json_path = gt_json_path.replace(".json",f"_perf_{model_type}.json")
+    self.dt_json_path = gt_json_path.replace(f"dt_{model_type}.json")
+    self.perf_json_path = gt_json_path.replace(f"perf_{model_type}.json")
     self.dt_box_list = []
     self.perf_info = {
       "prev":0,
@@ -176,7 +178,58 @@ class BenchMark():
     save_json(self.dt_box_list, self.dt_json_path)
     save_json(self.perf_info,   self.perf_json_path)
 
-  
+
+class CocoWorker():
+  def __init__(self):
+    # # Load the class names from the COCO dataset
+    self.classes = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'}
+    # Generate a color palette for the classes
+    self.color_palette = np.random.uniform(0, 255, size=(80, 3))
+
+
+  def draw_detections(self, img, single_box):
+      """
+      Draws bounding boxes and labels on the input image based on the detected objects.
+
+      Args:
+          img: The input image to draw detections on.
+          single_box: class_id, score, x1, y1, w, h = single_box
+
+      Returns:
+          None
+      """
+
+      # Extract the coordinates of the bounding box
+      class_id, score, x1, y1, w, h = single_box
+      class_id = int(class_id)
+      x1 = int(x1)
+      y1 = int(y1)
+      w = int(w)
+      h = int(h)
+
+      # Retrieve the color for the class ID
+      color = self.color_palette[class_id]
+
+      # Draw the bounding box on the image
+      cv2.rectangle(img, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color, 2)
+
+      # Create the label text with class name and score
+      label = f"{self.classes[class_id]}: {score:.2f}"
+
+      # Calculate the dimensions of the label text
+      (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+
+      # Calculate the position of the label text
+      label_x = x1
+      label_y = y1 - 10 if y1 - 10 > label_height else y1 + 10
+
+      # Draw a filled rectangle as the background for the label text
+      cv2.rectangle(
+          img, (label_x, label_y - label_height), (label_x + label_width, label_y + label_height), color, cv2.FILLED
+      )
+
+      # Draw the label text on the image
+      cv2.putText(img, label, (label_x, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
 
 if __name__ == "__main__":
   read_images_from_gt("dataset/annotations/instances_default.json")

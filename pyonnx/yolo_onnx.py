@@ -8,10 +8,7 @@ import torch
 import onnxruntime as ort
 import time
 
-from ultralytics.utils import ASSETS, yaml_load
-from ultralytics.utils.checks import check_requirements, check_yaml
-from utils import read_images_from_gt,BenchMark
-import json
+from utils import read_images_from_gt,BenchMark,CocoWorker
 
 
 class YOLOv8:
@@ -29,25 +26,20 @@ class YOLOv8:
         """
         self.onnx_model = args.model
         self.image_info_list = read_images_from_gt(args.gt_json_path)
-        self.bench_mark = BenchMark(args.gt_json_path,"yolo")
+        self.bench_mark = BenchMark(args.gt_json_path,"yolo_onnx")
 
         self.confidence_thres = args.conf_thres
         self.iou_thres = args.iou_thres
         self.batch_size = args.batch_size
 
-        # # Load the class names from the COCO dataset
-        self.classes = yaml_load(check_yaml("coco128.yaml"))["names"]
-
-        # Generate a color palette for the classes
-        self.color_palette = np.random.uniform(0, 255, size=(80, 3))
-
         self.create_session()
+        self.coco_worker = CocoWorker()
     
     def create_session(self):
         # Create an inference session using the ONNX model and specify execution providers
         # "CUDAExecutionProvider"
         # "CPUExecutionProvider"
-        self.session = ort.InferenceSession(self.onnx_model, providers=["CPUExecutionProvider"])
+        self.session = ort.InferenceSession(self.onnx_model, providers=["CUDAExecutionProvider","CPUExecutionProvider"])
         self.warmup()
         
         # Get the model inputs
@@ -62,53 +54,6 @@ class YOLOv8:
         else:
           self.input_width = input_shape[2]
           self.input_height = input_shape[3]
-        
-
-    def draw_detections(self, img, single_box):
-        """
-        Draws bounding boxes and labels on the input image based on the detected objects.
-
-        Args:
-            img: The input image to draw detections on.
-            box: Detected bounding box.
-            score: Corresponding detection score.
-            class_id: Class ID for the detected object.
-
-        Returns:
-            None
-        """
-
-        # Extract the coordinates of the bounding box
-        class_id, score, x1, y1, w, h = single_box
-        class_id = int(class_id)
-        x1 = int(x1)
-        y1 = int(y1)
-        w = int(w)
-        h = int(h)
-
-        # Retrieve the color for the class ID
-        color = self.color_palette[class_id]
-
-        # Draw the bounding box on the image
-        cv2.rectangle(img, (int(x1), int(y1)), (int(x1+w), int(y1+h)), color, 2)
-
-        # Create the label text with class name and score
-        label = f"{self.classes[class_id]}: {score:.2f}"
-
-        # Calculate the dimensions of the label text
-        (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-
-        # Calculate the position of the label text
-        label_x = x1
-        label_y = y1 - 10 if y1 - 10 > label_height else y1 + 10
-
-        # Draw a filled rectangle as the background for the label text
-        cv2.rectangle(
-            img, (label_x, label_y - label_height), (label_x + label_width, label_y + label_height), color, cv2.FILLED
-        )
-
-        # Draw the label text on the image
-        cv2.putText(img, label, (label_x, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
 
 
     def read_input_list(self):
@@ -261,7 +206,7 @@ class YOLOv8:
               image_info = self.image_info_list[batch_id*self.batch_size+i]
               image_name = image_info["file_name"]
               for single_box in net_outputs:
-                self.draw_detections(origin_image, single_box)
+                self.coco_worker.draw_detections(origin_image, single_box)
                 self.bench_mark.update_dt_anno(image_info["id"],single_box)
 
               cv2.imwrite(f"dataset/result/{image_name}",origin_image)

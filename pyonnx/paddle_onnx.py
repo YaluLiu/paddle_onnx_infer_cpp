@@ -7,11 +7,8 @@ import numpy as np
 import torch
 import onnxruntime as ort
 import time
-from utils import BenchMark,read_images_from_gt
+from utils import BenchMark,read_images_from_gt,CocoWorker
 import json
-
-from ultralytics.utils import ASSETS, yaml_load
-from ultralytics.utils.checks import check_requirements, check_yaml
 
 class YOLOv8:
     """YOLOv8 object detection model class for handling inference and visualization."""
@@ -33,57 +30,9 @@ class YOLOv8:
         self.iou_thres = args.iou_thres
         self.input_height = self.input_width = 0
         self.img_height = self.img_width = 0
-        self.bench_mark = BenchMark(args.gt_json_path,"paddle")
-
-        # Load the class names from the COCO dataset
-        self.classes = yaml_load(check_yaml("coco128.yaml"))["names"]
-
-        # Generate a color palette for the classes
-        self.color_palette = np.random.uniform(0, 255, size=(len(self.classes), 3))
+        self.bench_mark = BenchMark(args.gt_json_path,"paddle_onnx")
+        self.coco_worker = CocoWorker()
         self.create_session()
-        
-
-    def draw_detections(self, img, box, score, class_id):
-        """
-        Draws bounding boxes and labels on the input image based on the detected objects.
-
-        Args:
-            img: The input image to draw detections on.
-            box: Detected bounding box.
-            score: Corresponding detection score.
-            class_id: Class ID for the detected object.
-
-        Returns:
-            None
-        """
-
-        # Extract the coordinates of the bounding box
-        x1, y1, w, h = box
-
-        # Retrieve the color for the class ID
-        color = self.color_palette[class_id]
-
-        # Draw the bounding box on the image
-        cv2.rectangle(img, (int(x1), int(y1)), (int(x1 + w), int(y1 + h)), color, 2)
-
-        # Create the label text with class name and score
-        label = f"{self.classes[class_id]}: {score:.2f}"
-
-        # Calculate the dimensions of the label text
-        (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-
-        # Calculate the position of the label text
-        label_x = x1
-        label_y = y1 - 10 if y1 - 10 > label_height else y1 + 10
-
-        # Draw a filled rectangle as the background for the label text
-        cv2.rectangle(
-            img, (label_x, label_y - label_height), (label_x + label_width, label_y + label_height), color, cv2.FILLED
-        )
-
-        # Draw the label text on the image
-        cv2.putText(img, label, (label_x, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-
 
 
     def preprocess(self,input_path):
@@ -147,7 +96,7 @@ class YOLOv8:
         outputs = self.session.run(None, net_inputs)
 
     def create_session(self):
-        self.session = ort.InferenceSession(self.onnx_model, providers=["CUDAExecutionProvider"])
+        self.session = ort.InferenceSession(self.onnx_model, providers=["CUDAExecutionProvider","CPUExecutionProvider"])
         self.warmup()
         # Get the model inputs
         model_inputs = self.session.get_inputs()
@@ -204,11 +153,14 @@ class YOLOv8:
           expect_boxes = (outs[:, 0] > -1) & (outs[:, 1] > self.confidence_thres)
           np_boxes = outs[expect_boxes, :]
 
+
+          srcimg = cv2.imread(image_path)
           for i in range(np_boxes.shape[0]):
               classid, conf,x0,y0,x1,y1 = np_boxes[i]
               w = x1-x0
               h = y1-y0
               single_box = [classid,conf,x0,y0,w,h]
+              self.coco_worker.draw_detections(srcimg,single_box)
               self.bench_mark.update_dt_anno(image_id,single_box)
               anno_json = {
                 "bbox": [int(x0),int(y0),int(x1-x0),int(y1-y0)],
@@ -219,30 +171,6 @@ class YOLOv8:
               anno_id+=1
               dt_json_list.append(anno_json)
           
-          color_list = self.get_color_map_list(80)
-          clsid2color = {}
-
-          srcimg = cv2.imread(image_path)
-          for i in range(np_boxes.shape[0]):
-              classid, conf = int(np_boxes[i, 0]), np_boxes[i, 1]
-              xmin, ymin, xmax, ymax = int(np_boxes[i, 2]), int(np_boxes[
-                  i, 3]), int(np_boxes[i, 4]), int(np_boxes[i, 5])
-
-              if classid not in clsid2color:
-                  clsid2color[classid] = color_list[classid]
-              color = tuple(clsid2color[classid])
-
-              cv2.rectangle(
-                  srcimg, (xmin, ymin), (xmax, ymax), color, thickness=2)
-
-              cv2.putText(
-                  srcimg,
-                  self.classes[classid] + ':' + str(round(conf, 3)), (xmin,
-                                                                      ymin - 10),
-                  cv2.FONT_HERSHEY_SIMPLEX,
-                  0.8, (0, 255, 0),
-                  thickness=2)
-
           img_name = image_path.split("/")[-1]
           cv2.imwrite(f"dataset/result/{img_name}",srcimg)
 

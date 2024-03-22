@@ -27,7 +27,6 @@ class YoloSpeed:
     self.args = args
     self.model_format = model_format
     model_path = self.args.model+"."+self.model_format
-    self.export(model_path)
     self.model = YOLO(model_path,task="detect")
     warm_input = np.random.rand(self.args.input_h,self.args.input_w,3).astype(np.uint8)
     self.model.predict(warm_input, save=False, imgsz=(self.args.input_h,self.args.input_w), device=0,verbose=False)
@@ -81,13 +80,13 @@ class YoloSpeed:
 
     perf_info = {
       "inputs_num":len(all_inputs),
-      "resize":0,
+      "prev":0,
       "infer":0,
     }
     # resize
     start = time.time()
     all_inputs = [cv2.resize(img, (640,640)) for img in all_inputs]
-    perf_info["resize"] += time.time()-start
+    perf_info["prev"] += time.time()-start
 
     batch_size = self.args.batch_size
     batches = [all_inputs[i:i+batch_size] for i in range(0, len(all_inputs), batch_size)]
@@ -97,10 +96,7 @@ class YoloSpeed:
       results = self.predict(batch)
       perf_info["infer"] +=  time.time()-start
       # vis
-      self.visualize(results)
-      # save result
-      for result in results:
-        print(result.boxes)
+      # self.visualize(results)
 
     return perf_info
     
