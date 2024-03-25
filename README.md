@@ -15,6 +15,12 @@ bash run.sh build
 bash run.sh run
 ```
 
+```bash
+# 先去把paddledetection的tensorRT版本跑了
+bash run.sh eval
+```
+
+
 ## more version of onnx-runtime-lib
 [download_url](https://github.com/microsoft/onnxruntime/releases)
 

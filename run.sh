@@ -11,8 +11,18 @@ function download_onnx_runtime(){
   os="linux" # win
   wget https://github.com/microsoft/onnxruntime/releases/download/v${onnx_version}/onnxruntime-${os}-x64-gpu-${onnx_version}.tgz
   tar -zxvf onnxruntime-${os}-x64-gpu-${onnx_version}.tgz
-  # for save visualize result
-  mkdir result
+}
+
+function download_rapidjson(){
+  mkdir thridparty
+  cd thirdparty
+  git clone https://github.com/Tencent/rapidjson.git
+  cd ..
+}
+
+function create_env(){
+  download_onnx_runtime
+  download_rapidjson
 }
 
 function build(){
@@ -24,16 +34,31 @@ function build(){
 function run(){
   cd build
   make 
-  ./Yolov8OnnxRuntimeCPPInference
+  if [ $? -ne 0 ]; then
+    echo "make failed"
+  else
+    ./YoloOnnx yolo yolov8n.onnx
+    ./YoloOnnx paddle yolov8_n_500e_coco.onnx
+  fi
   cd ..
+  python pyonnx/paddle_onnx.py --model="yolov8_n_500e_coco.onnx"
+  python pyonnx/yolo_engine.py  --model="yolov8n.onnx"
+  python pyonnx/yolo_engine.py  --model="yolov8n.engine"
+  python pyonnx/yolo_engine.py  --model="yolov8n.pt"
 }
 
 # bash eval paddle or yolo
 function eval(){
   dataset_dir="dataset"
   anno_dir=${dataset_dir}/annotations
-  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/instances_default_dt_yolo.json
-  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/instances_default_dt_paddle.json
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_paddle_onnx.json
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_paddle_trt.json
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_paddle_cpp.json
+
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_onnx.json
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_trt.json
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_cpp.json
+  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_ori.json
 }
 
 
@@ -57,6 +82,9 @@ function stop() {
 
 local_dir="dataset"
 function mount() {
+  mkdir ${local_dir}
+  mkdir ${local_dir}/result
+
   server_name="yalu"
   server_pwd="liuyalu4545"
   local_name="boli-shixi"

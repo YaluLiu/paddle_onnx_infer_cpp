@@ -30,7 +30,7 @@ class YOLOv8:
             confidence_thres: Confidence threshold for filtering detections.
             iou_thres: IoU (Intersection over Union) threshold for non-maximum suppression.
         """
-        self.onnx_model = args.model
+        self.onnx_model = f"models/{args.model}"
         self.image_info_list = read_images_from_gt(args.gt_json_path)
         self.bench_mark = BenchMark(args.gt_json_path,"yolo_onnx")
 
@@ -242,9 +242,8 @@ class YOLOv8:
 
 if __name__ == "__main__":
     # Create an argument parser to handle command-line arguments
-    model_name="yolov8n.onnx"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default=f"models/{model_name}", help="Input your ONNX model.")
+    parser.add_argument("--model", type=str, default="yolov8n.onnx", help="Input your ONNX model.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
     parser.add_argument("--batch_size", type=int, default=1, help="batch_size for model input")

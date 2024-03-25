@@ -143,12 +143,10 @@ def make_fake_anno(json_results):
 
 class BenchMark():
   def __init__(self, batch_size,model_type):
-    self.dt_json_path = f"dt_{model_type}.json"
-    self.perf_json_path = f"perf_{model_type}.json"
+    self.dt_json_path = f"dataset/annotations/dt_{model_type}.json"
+    self.perf_json_path = f"dataset/annotations/perf_{model_type}.json"
     self.dt_box_list = []
     self.perf_info = {
-      "batch_size":batch_size,
-      "type":model_type,
       "prev":0,
       "infer":0,
       "post":0,

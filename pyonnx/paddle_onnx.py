@@ -27,7 +27,7 @@ class YOLOv8:
             iou_thres: IoU (Intersection over Union) threshold for non-maximum suppression.
         """
         self.args = args
-        self.onnx_model = args.model
+        self.onnx_model = f"models/{args.model}"
         self.image_info_list = read_images_from_gt(args.gt_json_path)
         self.confidence_thres = args.conf_thres
         self.iou_thres = args.iou_thres
@@ -108,11 +108,6 @@ class YOLOv8:
             output_img: The output image with drawn detections.
         """
         # Create an inference session using the ONNX model and specify execution providers
-        # "CUDAExecutionProvider"
-        # "CPUExecutionProvider"
-
-        dt_json_list = []
-        anno_id = 0
         for image_info in self.image_info_list:
           image_name = image_info["file_name"]
           image_path = f"dataset/images/{image_name}"
@@ -151,14 +146,6 @@ class YOLOv8:
               single_box = [classid,conf,x0,y0,w,h]
               self.coco_worker.draw_detections(srcimg,single_box)
               self.bench_mark.update_dt_anno(image_id,single_box)
-              anno_json = {
-                "bbox": [int(x0),int(y0),int(x1-x0),int(y1-y0)],
-                "category_id": int(classid),
-                "score": round(float(conf),2),
-                "image_id":image_id,
-              }
-              anno_id+=1
-              dt_json_list.append(anno_json)
           
           img_name = image_path.split("/")[-1]
           cv2.imwrite(f"dataset/result/{img_name}",srcimg)
@@ -169,7 +156,7 @@ if __name__ == "__main__":
     # Create an argument parser to handle command-line arguments
     model_name="yolov8_n_500e_coco.onnx"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default=f"models/{model_name}", help="Input your ONNX model.")
+    parser.add_argument("--model", type=str, default=f"{model_name}", help="Input your ONNX model.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
 

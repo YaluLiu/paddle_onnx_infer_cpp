@@ -33,10 +33,20 @@ class YOLOv8:
             iou_thres: IoU (Intersection over Union) threshold for non-maximum suppression.
         """
         self.args = args
-        self.model = YOLO(args.model,task="detect")
+        model_path = f"models/{args.model}"
+        self.model = YOLO(model_path,task="detect")
 
         self.image_info_list = read_images_from_gt(args.gt_json_path)
-        self.bench_mark = BenchMark(args.gt_json_path,"yolo_trt")
+
+        suffix = args.model.split(".")[1]
+        if suffix == "pt":
+          model_type = "ori"
+        elif suffix == "engine":
+          model_type = "trt"
+        elif suffix == "onnx":
+          model_type = "onnx"
+
+        self.bench_mark = BenchMark(args.gt_json_path,f"yolo_{model_type}")
 
         self.confidence_thres = args.conf_thres
         self.iou_thres = args.iou_thres
@@ -123,9 +133,8 @@ class YOLOv8:
 
 if __name__ == "__main__":
     # Create an argument parser to handle command-line arguments
-    model_name="yolov8n.onnx"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default=f"models/{model_name}", help="Input your ONNX model.")
+    parser.add_argument("--model", type=str, default="yolov8n.onnx", help="Input your ONNX model.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
     parser.add_argument("--batch_size", type=int, default=1, help="batch_size for model input")

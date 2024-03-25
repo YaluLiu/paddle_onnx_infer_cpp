@@ -14,7 +14,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # -------------- OpenCV  ------------------#
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
-
+include_directories("thirdparty/rapidjson/include")
 # -------------- Compile CUDA for FP16 inference if needed  ------------------#
 option(USE_CUDA "Enable CUDA support" ON)
 if (NOT APPLE AND USE_CUDA)
@@ -63,6 +63,8 @@ set(PROJECT_SOURCES
         main.cpp
         inference.h
         inference.cpp
+        benchmark.h
+        benchmark.cpp
 )
 
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})

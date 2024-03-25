@@ -40,7 +40,6 @@ class COCOResults(object):
     def update(self, coco_eval):
         if coco_eval is None:
             return
-        from pycocotools.cocoeval import COCOeval
  
         assert isinstance(coco_eval, COCOeval)
         s = coco_eval.stats
