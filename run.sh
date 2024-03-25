@@ -20,7 +20,7 @@ function download_rapidjson(){
   cd ..
 }
 
-function create_env(){
+function download_runtime_lib(){
   download_onnx_runtime
   download_rapidjson
 }

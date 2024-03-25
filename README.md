@@ -10,7 +10,11 @@ This example demonstrates how to perform inference using YOLOv8-onnx-models,now 
 
 ```bash
 # download onnx_runtime_lib
-bash run.sh download_onnx_runtime
+bash run.sh download_runtime_lib
+# must change mount dir before 
+bash run.sh mount
+# create docker
+bash run.sh create
 bash run.sh build
 bash run.sh run
 ```
