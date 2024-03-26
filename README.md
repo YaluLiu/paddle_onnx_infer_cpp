@@ -16,6 +16,8 @@ bash run.sh mount
 # create docker
 bash run.sh create
 bash run.sh build
+# export model of engine & onnx, it depends on the hardware environment 
+bash run.sh export
 bash run.sh run
 ```
 
