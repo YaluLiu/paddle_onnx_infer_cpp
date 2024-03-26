@@ -14,7 +14,7 @@ function download_onnx_runtime(){
 }
 
 function download_rapidjson(){
-  mkdir thridparty
+  mkdir thirdparty
   cd thirdparty
   git clone https://github.com/Tencent/rapidjson.git
   cd ..
