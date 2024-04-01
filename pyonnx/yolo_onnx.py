@@ -121,9 +121,6 @@ class YOLOv8:
         # Transpose and squeeze the output to match the expected shape
         outputs = np.transpose(np.squeeze(output))
 
-        # Get the number of rows in the outputs array
-        rows = outputs.shape[0]
-
         # Lists to store the bounding boxes, scores, and class IDs of the detections
         boxes = []
         scores = []
@@ -134,6 +131,14 @@ class YOLOv8:
         x_factor = self.img_width / self.input_width
         y_factor = self.img_height / self.input_height
 
+        classes_scores = outputs[:,4:]
+        max_score = np.amax(classes_scores,axis = 1)
+        max_score_mask = max_score > self.confidence_thres
+        outputs = outputs[max_score_mask]
+
+        # Get the number of rows in the outputs array
+        rows = outputs.shape[0]
+
         # Iterate over each row in the outputs array
         for i in range(rows):
             # Extract the class scores from the current row
@@ -142,24 +147,22 @@ class YOLOv8:
             # Find the maximum score among the class scores
             max_score = np.amax(classes_scores)
 
-            # If the maximum score is above the confidence threshold
-            if max_score >= self.confidence_thres:
-                # Get the class ID with the highest score
-                class_id = np.argmax(classes_scores)
+            # Get the class ID with the highest score
+            class_id = np.argmax(classes_scores)
 
-                # Extract the bounding box coordinates from the current row
-                x, y, w, h = outputs[i][0], outputs[i][1], outputs[i][2], outputs[i][3]
+            # Extract the bounding box coordinates from the current row
+            x, y, w, h = outputs[i][0], outputs[i][1], outputs[i][2], outputs[i][3]
 
-                # Calculate the scaled coordinates of the bounding box
-                left = int((x - w / 2) * x_factor)
-                top = int((y - h / 2) * y_factor)
-                width = int(w * x_factor)
-                height = int(h * y_factor)
+            # Calculate the scaled coordinates of the bounding box
+            left = int((x - w / 2) * x_factor)
+            top = int((y - h / 2) * y_factor)
+            width = int(w * x_factor)
+            height = int(h * y_factor)
 
-                # Add the class ID, score, and box coordinates to the respective lists
-                class_ids.append(class_id)
-                scores.append(max_score)
-                boxes.append([left, top, width, height])
+            # Add the class ID, score, and box coordinates to the respective lists
+            class_ids.append(class_id)
+            scores.append(max_score)
+            boxes.append([left, top, width, height])
 
         # Apply non-maximum suppression to filter out overlapping bounding boxes
         indices = cv2.dnn.NMSBoxes(boxes, scores, self.confidence_thres, self.iou_thres)

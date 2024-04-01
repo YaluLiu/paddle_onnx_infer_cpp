@@ -80,6 +80,11 @@ public:
 
     std::vector<std::string> classes{};
 
+    // for bench-mark
+    float m_infer_cost;
+    float m_prev_cost;
+    float m_post_cost;
+
 private:
     //must be class variable,else crush ??? 
     Ort::Env m_env;

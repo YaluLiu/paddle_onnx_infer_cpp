@@ -31,7 +31,7 @@ function build(){
   run
 }
 
-function run(){
+function run_cpp(){
   cd build
   make 
   if [ $? -ne 0 ]; then
@@ -41,10 +41,13 @@ function run(){
     ./YoloOnnx paddle yolov8_n_500e_coco.onnx
   fi
   cd ..
-  python pyonnx/paddle_onnx.py --model="yolov8_n_500e_coco.onnx"
-  python pyonnx/yolo_engine.py  --model="yolov8n.onnx"
-  python pyonnx/yolo_engine.py  --model="yolov8n.engine"
-  python pyonnx/yolo_engine.py  --model="yolov8n.pt"
+}
+
+function run_py(){
+  python pyonnx/yolo_onnx.py  --model="yolov8n.onnx"
+  # python pyonnx/paddle_onnx.py --model="yolov8_n_500e_coco.onnx"
+  # python pyonnx/yolo_engine.py  --model="yolov8n.engine"
+  # python pyonnx/yolo_engine.py  --model="yolov8n.pt"
 }
 
 # bash eval paddle or yolo
@@ -52,13 +55,14 @@ function eval(){
   dataset_dir="dataset"
   anno_dir=${dataset_dir}/annotations
   python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_paddle_onnx.json
-  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_paddle_trt.json
   python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_paddle_cpp.json
 
   python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_onnx.json
-  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_trt.json
   python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_cpp.json
-  python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_ori.json
+
+  # python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_paddle_trt.json
+  # python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_trt.json
+  # python pyonnx/eval.py --gt ${anno_dir}/instances_default.json --dt ${anno_dir}/dt_yolo_ori.json
 }
 
 
@@ -68,6 +72,7 @@ function eval(){
 container_name="cpp_onnx"
 function restart(){
   docker restart ${container_name}
+  exec
 }
 
 function exec() {
@@ -82,8 +87,13 @@ function stop() {
 
 local_dir="dataset"
 function mount() {
-  mkdir ${local_dir}
-  mkdir ${local_dir}/result
+  if [ ! -d ${local_dir} ];then
+    mkdir ${local_dir}
+  fi
+
+  if [ ! -d ${local_dir}/result ];then
+    mkdir ${local_dir}/result
+  fi
 
   server_name="yalu"
   server_pwd="liuyalu4545"
@@ -105,7 +115,6 @@ function create() {
        -v ${project_dir}:${work_dir} \
        -v /home/boli-shixi/yalu/ultralytics/models:${work_dir}/models \
        ${image_name}
-    restart
     exec
 }
 

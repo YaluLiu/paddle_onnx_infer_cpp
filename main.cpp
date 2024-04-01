@@ -32,9 +32,6 @@ int trans_class_id(int class_id){
 }
 
 void Detector(YOLO_V8*& p,std::vector<std::string> image_name_list,std::vector<int> image_id_list,std::string model_type) {
-    double prev_cost = 0;
-    double infer_cost = 0;
-    double post_cost = 0;
     size_t num_images = image_name_list.size();
     rapidjson::StringBuffer anno_str_buf;
     rapidjson::Writer<rapidjson::StringBuffer> anno_writer(anno_str_buf);
@@ -46,11 +43,7 @@ void Detector(YOLO_V8*& p,std::vector<std::string> image_name_list,std::vector<i
         std::string img_path = "../dataset/images/" + image_name;
         cv::Mat img = cv::imread(img_path);
         std::vector<DL_RESULT> res;
-        clock_t starttime_start = clock();
         p->RunSession(img, res);
-        clock_t starttime_end = clock();
-        infer_cost += (double)(starttime_end - starttime_start) / CLOCKS_PER_SEC;
-
         for (auto& re : res)
         {
             cv::RNG rng(cv::getTickCount());
@@ -108,7 +101,6 @@ void Detector(YOLO_V8*& p,std::vector<std::string> image_name_list,std::vector<i
             anno_writer.EndObject();
         }
         std::string result_path=std::string("../dataset/result/") + image_name;
-        // std::cout << img_path << "->" << result_path << std::endl;
         cv::imwrite(result_path,img);
     }
     anno_writer.EndArray();
@@ -120,11 +112,11 @@ void Detector(YOLO_V8*& p,std::vector<std::string> image_name_list,std::vector<i
     rapidjson::Writer<rapidjson::StringBuffer> perf_writer(perf_str_buf);
     perf_writer.StartObject();
     perf_writer.Key("prev");
-    perf_writer.Double(prev_cost);
+    perf_writer.Double(p->m_prev_cost);
     perf_writer.Key("infer");
-    perf_writer.Double(infer_cost);
+    perf_writer.Double(p->m_infer_cost);
     perf_writer.Key("post");
-    perf_writer.Double(post_cost);
+    perf_writer.Double(p->m_post_cost);
     perf_writer.EndObject();
     std::string perf_json_path = "../dataset/annotations/perf_" + model_type + "_cpp.json";
     data = perf_str_buf.GetString();

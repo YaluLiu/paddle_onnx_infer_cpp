@@ -116,7 +116,7 @@ class YOLOv8:
                 x,y,x2,y2 = box.xyxy[0]
                 w = x2 - x
                 h = y2 - y
-                cls = box.cls 
+                cls = box.cls
                 conf = box.conf
                 single_box = [cls,conf,x,y,w,h]
                 self.coco_worker.draw_detections(origin_image,single_box)

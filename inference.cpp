@@ -154,9 +154,12 @@ char* YOLO_V8::CreateSession(DL_INIT_PARAM& iParams) {
 char* YOLO_V8::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
     char* Ret = RET_OK;
     cv::Mat processedImg;
+    clock_t starttime_start = clock();
     PreProcess(iImg, m_params.imgSize, processedImg);
     float* blob = new float[processedImg.total() * 3];
     BlobFromImage(processedImg, blob);
+    m_prev_cost += (double)(clock() - starttime_start) / CLOCKS_PER_SEC;
+
     if (m_params.modelType == YOLO_PADDLE) {
         PaddleProcess(iImg, blob, oResult);
     } else if (m_params.modelType == YOLO_DETECT_V8) {
@@ -175,6 +178,7 @@ char* YOLO_V8::RunSession(cv::Mat& iImg, std::vector<DL_RESULT>& oResult) {
 
 template<typename N>
 char* YOLO_V8::PaddleProcess(cv::Mat& iImg, N& blob, std::vector<DL_RESULT>& oResult) {
+    clock_t starttime_start = clock();
     auto input_w = m_params.imgSize.at(1);
     auto input_h = m_params.imgSize.at(0);
     std::vector<int64_t> inputNodeDims = { 1, 3, input_h, input_w };
@@ -200,9 +204,13 @@ char* YOLO_V8::PaddleProcess(cv::Mat& iImg, N& blob, std::vector<DL_RESULT>& oRe
 
     auto outputTensor = m_session->Run(options, m_inputNodeNames.data(), ort_inputs.data(), m_inputNodeNames.size(),
                               m_outputNodeNames.data(), m_outputNodeNames.size());
-
-    // 开始处理输出数据
     delete[] blob;
+    m_infer_cost += (double)(clock() - starttime_start) / CLOCKS_PER_SEC;
+
+
+    
+    // 开始处理输出数据
+    starttime_start = clock();
     Ort::TypeInfo typeInfo = outputTensor.front().GetTypeInfo();
     auto tensor_info = typeInfo.GetTensorTypeAndShapeInfo();
     std::vector<int64_t> outputNodeDims = tensor_info.GetShape();
@@ -216,7 +224,7 @@ char* YOLO_V8::PaddleProcess(cv::Mat& iImg, N& blob, std::vector<DL_RESULT>& oRe
     for (int i = 0; i < signalResultNum; ++i)
     {
         float confidence = float(data[1]);
-        if(confidence > m_params.rectConfidenceThreshold){
+        if(confidence > m_params.rectConfidenceThreshold) {
           int left = int(data[2]);
           int top = int(data[3]);
 
@@ -234,13 +242,14 @@ char* YOLO_V8::PaddleProcess(cv::Mat& iImg, N& blob, std::vector<DL_RESULT>& oRe
       }
       data += strideNum;
     }
-    
+    m_post_cost += (double)(clock() - starttime_start) / CLOCKS_PER_SEC;
     return RET_OK;
 }
 
 
 template<typename N>
 char* YOLO_V8::YOLO_origin_Process(cv::Mat& iImg, N& blob, std::vector<DL_RESULT>& oResult) {
+    clock_t starttime_start = clock();
     auto input_w = m_params.imgSize.at(1);
     auto input_h = m_params.imgSize.at(0);
     std::vector<int64_t> inputNodeDims = { 1, 3, input_h, input_w };
@@ -253,7 +262,9 @@ char* YOLO_V8::YOLO_origin_Process(cv::Mat& iImg, N& blob, std::vector<DL_RESULT
 
     auto output = outputTensor.front().GetTensorMutableData<typename std::remove_pointer<N>::type>();
     delete[] blob;
-
+    m_infer_cost += (double)(clock() - starttime_start) / CLOCKS_PER_SEC;
+    
+    starttime_start = clock();
     // outputNodeDims[1,84,8400]
     Ort::TypeInfo typeInfo = outputTensor.front().GetTypeInfo();
     auto tensor_info = typeInfo.GetTensorTypeAndShapeInfo();
@@ -315,6 +326,7 @@ char* YOLO_V8::YOLO_origin_Process(cv::Mat& iImg, N& blob, std::vector<DL_RESULT
         result.box = boxes[idx];
         oResult.push_back(result);
     }
+    m_post_cost += (double)(clock() - starttime_start) / CLOCKS_PER_SEC;
     return RET_OK;
 
 }

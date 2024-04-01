@@ -167,7 +167,7 @@ class BenchMark():
       return 
     single_result = {
         "image_id":image_id,
-        "bbox":[float(x1),float(y1),float(w),float(h)], # can be float
+        "bbox":[int(x1), int(y1), int(w), int(h)], # can be float
         "category_id":int(class_id),
         "score":round(float(score),2),
     }
