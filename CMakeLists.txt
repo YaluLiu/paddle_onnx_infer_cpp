@@ -60,11 +60,11 @@ message(STATUS "ONNXRUNTIME_ROOT:${ONNXRUNTIME_ROOT}")
 include_directories(${PROJECT_NAME} ${ONNXRUNTIME_ROOT}/include)
 
 set(PROJECT_SOURCES
-        main.cpp
-        inference.h
-        inference.cpp
-        benchmark.h
-        benchmark.cpp
+  main.cpp
+  inference.h
+  inference.cpp
+  yolo_net.h 
+  yolo_net.cpp 
 )
 
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})

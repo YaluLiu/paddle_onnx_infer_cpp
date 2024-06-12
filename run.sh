@@ -3,6 +3,7 @@
 
 project_dir=$(cd "$(dirname "$0")";pwd)
 container_name="ultralytics"
+# image_name="nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04"
 image_name="353942829/ultralytics:cpp"
 work_dir="/ultralytics"
 
@@ -28,17 +29,17 @@ function download_runtime_lib(){
 function build(){
   mkdir build
   cmake -B build .
-  run
 }
 
 function run_cpp(){
   cd build
-  make 
+  make
+  cd ..
   if [ $? -ne 0 ]; then
     echo "make failed"
   else
-    ./YoloOnnx yolo yolov8n.onnx
-    ./YoloOnnx paddle yolov8_n_500e_coco.onnx
+    ./build/YoloOnnx yolo yolov8n.onnx
+    # ./YoloOnnx paddle yolov8_n_500e_coco.onnx
   fi
   cd ..
 }
@@ -46,8 +47,8 @@ function run_cpp(){
 function run_py(){
   python pyonnx/yolo_onnx.py  --model="yolov8n.onnx"
   # python pyonnx/paddle_onnx.py --model="yolov8_n_500e_coco.onnx"
-  # python pyonnx/yolo_engine.py  --model="yolov8n.engine"
-  # python pyonnx/yolo_engine.py  --model="yolov8n.pt"
+  python pyonnx/yolo_engine.py  --model="yolov8n.engine"
+  python pyonnx/yolo_engine.py  --model="yolov8n.pt"
 }
 
 # bash eval paddle or yolo
